@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 // Replace with your Jetson's IP address
-const API_URL = "http://172.29.172.210:5001"  // Jetson's ZeroTier IP
-const SOCKET_URL = 'ws://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket';
+const API_URL = "https://172.29.172.210:5001"
+const SOCKET_URL = 'wss://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket';
 
 const DronePWMControl = () => {
   // State management
