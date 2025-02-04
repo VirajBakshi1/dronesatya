@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 // Replace with your Jetson's IP address
-const SOCKET_URL = 'ws://172.29.172.210:5001'
+const SOCKET_URL = 'http://172.29.172.210:5001';
 
 const DroneTelemetry = () => {
   const [telemetryData, setTelemetryData] = useState({
@@ -21,11 +21,14 @@ const DroneTelemetry = () => {
   useEffect(() => {
     // Create socket connection
     socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      forceNew: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      timeout: 20000
+      timeout: 20000,
+      path: '/socket.io'
     });
 
     const socket = socketRef.current;
