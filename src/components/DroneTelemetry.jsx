@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 // Replace with your Jetson's IP address
-const SOCKET_URL = 'http://172.31.220.244:5001';
+const SOCKET_URL = 'http://172.29.172.210:5001';
 
 const DroneTelemetry = () => {
   const [telemetryData, setTelemetryData] = useState({
