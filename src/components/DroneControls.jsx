@@ -12,8 +12,8 @@ import {
 } from "./ui/alert-dialog";
 
 // Replace with your Jetson's IP address
-const API_URL = 'http://quickverse.hopto.org:5001/api';
-const SOCKET_URL = 'http://quickverse.hopto.org:5001';
+const API_URL = 'http://172.29.172.210:5001'
+const SOCKET_URL = 'ws://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket'
 
 const DroneControls = () => {
   const [pressedKeys, setPressedKeys] = useState([]);
