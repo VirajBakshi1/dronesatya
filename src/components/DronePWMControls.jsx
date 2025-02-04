@@ -3,8 +3,8 @@ import { io } from 'socket.io-client';
 
 // Replace with your Jetson's IP address
 // Change these lines
-const API_URL = "http://172.29.172.210:5001"  // Back to HTTP
-const SOCKET_URL = 'ws://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket';  // Back to WS
+const API_URL = "https://172.29.172.210:5001"
+const SOCKET_URL = 'wss://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket';
 
 const DronePWMControl = () => {
   // State management
