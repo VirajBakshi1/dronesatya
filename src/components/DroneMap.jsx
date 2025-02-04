@@ -53,7 +53,7 @@ const DroneMap = () => {
   );
 
   useEffect(() => {
-    const socket = io('http://192.168.104.244:5001', {
+    const socket = io('http://172.29.172.210:5001', {   // Changed only this line
       transports: ['polling', 'websocket'],
       upgrade: true,
       rememberUpgrade: true,
