@@ -49,29 +49,26 @@ const DronePWMControl = () => {
 
   // Socket.io setup
   useEffect(() => {
-    console.log("Setting up Socket.IO connection...");
-
     const socket = io(SOCKET_URL, {
         transports: ['polling'],
         reconnection: false,
-        autoConnect: true,
-        forceNew: false,
-        timeout: 5000,
-        upgrade: false  // Explicitly disable WebSocket upgrade
+        path: '/socket.io' // Added path configuration
     });
 
     socket.on('connect', () => {
-        console.log('Connected to server with ID:', socket.id);
+        console.log('Connected:', socket.id);
         setError(null);
     });
 
     socket.on('connect_error', (error) => {
-        console.error('Connection error details:', {
-            message: error.message,
-            type: error.type,
-            description: error.description
-        });
+        console.error('Connection failed:', error);
+        setError(`Socket connection error: ${error.message || 'Unknown error'}`); // Update error state
     });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Disconnected:', reason);
+    });
+
 
     socket.on('pwm_values', (data) => {
         try {
@@ -93,18 +90,10 @@ const DronePWMControl = () => {
         }
     });
 
-    socket.on('error', (error) => {
-        console.error('Socket error:', error);
-    });
-
-    socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected:', reason);
-    });
 
     return () => {
-        console.log('Cleaning up Socket.IO...');
-        socket.removeAllListeners();
-        socket.close();
+        console.log('Socket cleanup');
+        socket.disconnect();
     };
 }, []); // Empty dependency array
 
