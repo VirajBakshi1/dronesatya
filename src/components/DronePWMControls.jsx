@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
-// Replace with your Jetson's IP address
-// Change these lines
-const API_URL = "http://172.29.172.210:5001"  // Your Jetson's ZeroTier IP
-const SOCKET_URL = 'ws://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket';
+// Connection URLs
+const API_URL = "http://172.29.172.210:5001"
+const SOCKET_URL = "http://172.29.172.210:5001"
 
 const DronePWMControl = () => {
   // State management
@@ -24,6 +23,7 @@ const DronePWMControl = () => {
   // Refs for continuous key press
   const pressedKeysRef = useRef(new Set());
   const pwmUpdateInterval = useRef(null);
+  const socketRef = useRef(null);
 
   // Key mapping configuration
   const keyMappings = {
@@ -49,23 +49,50 @@ const DronePWMControl = () => {
 
   // Socket.io setup
   useEffect(() => {
-    const socket = io(SOCKET_URL);
+    socketRef.current = io(SOCKET_URL, {
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        autoConnect: true
+    });
+
+    const socket = socketRef.current;
 
     socket.on('connect', () => {
-      console.log('WebSocket Connected');
+        console.log('WebSocket Connected, Socket ID:', socket.id);
+    });
+
+    socket.on('connect_error', (error) => {
+        console.log('Connection Error:', error);
+        setError(`WebSocket connection error: ${error.message}`);
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('WebSocket Disconnected:', reason);
     });
 
     socket.on('pwm_values', (data) => {
-      setPwmValues(data);
+        console.log('Received PWM values:', data);
+        setPwmValues(data);
     });
 
     socket.on('telemetry', (data) => {
-      if (data.battery_level !== undefined) {
-        setBatteryLevel(data.battery_level);
-      }
+        console.log('Received telemetry:', data);
+        if (data.battery_level !== undefined) {
+            setBatteryLevel(data.battery_level);
+        }
     });
 
-    return () => socket.disconnect();
+    return () => {
+        console.log('Cleaning up socket connection');
+        if (socketRef.current) {
+            socketRef.current.disconnect();
+        }
+    };
   }, []);
 
   // Continuous PWM update for held keys
@@ -186,7 +213,7 @@ const DronePWMControl = () => {
     );
 
     return (
-      <div className="mb-4 ">
+      <div className="mb-4">
         <div className="flex justify-between mb-1">
           <span className={`font-semibold ${isActive ? 'text-blue-600' : ''}`}>
             {label}
