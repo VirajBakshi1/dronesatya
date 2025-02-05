@@ -50,29 +50,28 @@ const DronePWMControl = () => {
   // Socket.io setup
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
-        transports: ['polling', 'websocket'],
-        upgrade: true,
+        transports: ['polling'],      // Use only polling
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 20000,
-        autoConnect: true
+        path: '/socket.io'
     });
 
     const socket = socketRef.current;
 
     socket.on('connect', () => {
-        console.log('WebSocket Connected, Socket ID:', socket.id);
+        console.log('Connected to server with ID:', socket.id);
     });
 
     socket.on('connect_error', (error) => {
-        console.log('Connection Error:', error);
-        setError(`WebSocket connection error: ${error.message}`);
+        console.error('Connection error:', error);
+        setError(`Connection error: ${error.message}`);
     });
 
     socket.on('disconnect', (reason) => {
-        console.log('WebSocket Disconnected:', reason);
+        console.log('Disconnected:', reason);
     });
 
     socket.on('pwm_values', (data) => {
@@ -140,7 +139,7 @@ const DronePWMControl = () => {
       });
       const data = await response.json();
       console.log(`Command ${command} response:`, data);
-      
+
       if (data.data?.pwm_values) {
         setPwmValues(data.data.pwm_values);
       }
@@ -150,7 +149,7 @@ const DronePWMControl = () => {
       if (data.data?.flight_mode) {
         setFlightMode(data.data.flight_mode);
       }
-      
+
       if (!data.success) {
         setError(data.message);
       }
@@ -233,7 +232,7 @@ const DronePWMControl = () => {
   };
 
   return (
-    <div 
+    <div
       className="p-6 bg-slate-900 text-white rounded-lg shadow-lg max-w-2xl mx-auto"
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -291,12 +290,12 @@ const DronePWMControl = () => {
           {flightActions.map((action) => {
             const isDisabled = action.requiresArmed ? !armed : (action.name === 'Arm' ? armed : !armed);
             const isLoading = actionInProgress === action.endpoint;
-            
+
             return (
               <button
                 key={action.name}
                 onClick={() => handleFlightAction(action)}
-                className={`px-4 py-2 rounded text-white font-semibold 
+                className={`px-4 py-2 rounded text-white font-semibold
                   ${action.color} transition-colors
                   ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}
                   ${isLoading ? 'animate-pulse' : ''}
