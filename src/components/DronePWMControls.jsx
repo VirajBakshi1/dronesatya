@@ -50,49 +50,43 @@ const DronePWMControl = () => {
   // Socket.io setup
   useEffect(() => {
     socketRef.current = io(SOCKET_URL, {
-        transports: ['polling'],      // Use only polling
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 20000,
-        path: '/socket.io'
+        transports: ['polling'],
+        reconnection: false,  // Disable auto-reconnect
+        autoConnect: true,
+        forceNew: false,      // Don't create new connection each time
+        timeout: 5000
     });
 
     const socket = socketRef.current;
 
     socket.on('connect', () => {
         console.log('Connected to server with ID:', socket.id);
+        setError(null);  // Clear any previous errors
     });
 
     socket.on('connect_error', (error) => {
         console.error('Connection error:', error);
-        setError(`Connection error: ${error.message}`);
-    });
-
-    socket.on('disconnect', (reason) => {
-        console.log('Disconnected:', reason);
     });
 
     socket.on('pwm_values', (data) => {
-        console.log('Received PWM values:', data);
-        setPwmValues(data);
+        if (data) setPwmValues(data);
     });
 
     socket.on('telemetry', (data) => {
-        console.log('Received telemetry:', data);
-        if (data.battery_level !== undefined) {
+        if (data && data.battery_level !== undefined) {
             setBatteryLevel(data.battery_level);
         }
     });
 
+    // Clean up
     return () => {
-        console.log('Cleaning up socket connection');
         if (socketRef.current) {
-            socketRef.current.disconnect();
+            socketRef.current.removeAllListeners();
+            socketRef.current.close();
         }
     };
-  }, []);
+}, []); // Empty dependency array
+
 
   // Continuous PWM update for held keys
   useEffect(() => {
