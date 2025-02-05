@@ -49,41 +49,62 @@ const DronePWMControl = () => {
 
   // Socket.io setup
   useEffect(() => {
-    socketRef.current = io(SOCKET_URL, {
-        transports: ['polling'],
-        reconnection: false,  // Disable auto-reconnect
-        autoConnect: true,
-        forceNew: false,      // Don't create new connection each time
-        timeout: 5000
-    });
+    console.log("Setting up Socket.IO connection...");
 
-    const socket = socketRef.current;
+    const socket = io(SOCKET_URL, {
+        transports: ['polling'],
+        reconnection: false,
+        autoConnect: true,
+        forceNew: false,
+        timeout: 5000,
+        upgrade: false  // Explicitly disable WebSocket upgrade
+    });
 
     socket.on('connect', () => {
         console.log('Connected to server with ID:', socket.id);
-        setError(null);  // Clear any previous errors
+        setError(null);
     });
 
     socket.on('connect_error', (error) => {
-        console.error('Connection error:', error);
+        console.error('Connection error details:', {
+            message: error.message,
+            type: error.type,
+            description: error.description
+        });
     });
 
     socket.on('pwm_values', (data) => {
-        if (data) setPwmValues(data);
+        try {
+            console.log('Received PWM values:', data);
+            if (data) setPwmValues(data);
+        } catch (error) {
+            console.error("Error in PWM handler:", error);
+        }
     });
 
     socket.on('telemetry', (data) => {
-        if (data && data.battery_level !== undefined) {
-            setBatteryLevel(data.battery_level);
+        try {
+            console.log('Received telemetry:', data);
+            if (data && data.battery_level !== undefined) {
+                setBatteryLevel(data.battery_level);
+            }
+        } catch (error) {
+            console.error("Error in telemetry handler:", error);
         }
     });
 
-    // Clean up
+    socket.on('error', (error) => {
+        console.error('Socket error:', error);
+    });
+
+    socket.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+    });
+
     return () => {
-        if (socketRef.current) {
-            socketRef.current.removeAllListeners();
-            socketRef.current.close();
-        }
+        console.log('Cleaning up Socket.IO...');
+        socket.removeAllListeners();
+        socket.close();
     };
 }, []); // Empty dependency array
 
