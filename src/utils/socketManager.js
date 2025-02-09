@@ -1,56 +1,109 @@
-import { io } from 'socket.io-client';
-
-const SOCKET_URL = 'http://172.29.172.210:5001';
+// socketManager.js
+const WS_URL = 'ws://172.29.172.210:5001/ws';
 
 class SocketManager {
     constructor() {
         this.socket = null;
         this.connected = false;
         this.listeners = new Map();
+        this.reconnectInterval = null;
     }
 
     connect() {
         if (this.socket) return;
 
-        this.socket = io(SOCKET_URL, {
-            transports: ['websocket'],
-            reconnection: true,
-            reconnectionAttempts: Infinity,
-            reconnectionDelay: 1000
-        });
+        try {
+            this.socket = new WebSocket(WS_URL);
 
-        this.socket.on('connect', () => {
-            console.log('Connected to drone');
-            this.connected = true;
-            this.notifyListeners('connection', { status: 'connected' });
-        });
+            this.socket.onopen = () => {
+                console.log('Connected to drone');
+                this.connected = true;
+                this.notifyListeners('connection', { status: 'connected' });
+                if (this.reconnectInterval) {
+                    clearInterval(this.reconnectInterval);
+                    this.reconnectInterval = null;
+                }
+            };
 
-        this.socket.on('disconnect', () => {
-            console.log('Disconnected from drone');
-            this.connected = false;
-            this.notifyListeners('connection', { status: 'disconnected' });
-        });
+            this.socket.onclose = () => {
+                console.log('Disconnected from drone');
+                this.connected = false;
+                this.notifyListeners('connection', { status: 'disconnected' });
+                this.reconnect();
+            };
 
-        this.socket.on('connect_error', (error) => {
+            this.socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.notifyListeners('error', { error });
+            };
+
+            this.socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    const { type, data: payload } = data;
+                    
+                    switch (type) {
+                        case 'telemetry':
+                            this.notifyListeners('telemetry', payload);
+                            break;
+                        case 'drone_state':
+                            this.notifyListeners('drone_state', payload);
+                            break;
+                        case 'command_response':
+                            this.notifyListeners('command_response', payload);
+                            break;
+                        case 'pwm_values':
+                            this.notifyListeners('pwm_values', payload);
+                            break;
+                        case 'error':
+                            this.notifyListeners('error', payload);
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Message parsing error:', error);
+                }
+            };
+        } catch (error) {
             console.error('Connection error:', error);
-            this.notifyListeners('error', { error });
-        });
+            this.reconnect();
+        }
+    }
 
-        // Add listeners for your existing events
-        this.socket.on('telemetry', (data) => {
-            this.notifyListeners('telemetry', data);
-        });
-
-        this.socket.on('pwm_values', (data) => {
-            this.notifyListeners('pwm_values', data);
-        });
+    reconnect() {
+        if (!this.reconnectInterval) {
+            this.reconnectInterval = setInterval(() => {
+                if (!this.connected) {
+                    console.log('Attempting to reconnect...');
+                    this.connect();
+                }
+            }, 2000); // Try every 2 seconds
+        }
     }
 
     disconnect() {
         if (this.socket) {
-            this.socket.disconnect();
+            this.socket.close();
             this.socket = null;
         }
+        if (this.reconnectInterval) {
+            clearInterval(this.reconnectInterval);
+            this.reconnectInterval = null;
+        }
+    }
+
+    sendCommand(command, params = {}) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error('Not connected to drone');
+            return false;
+        }
+        
+        const message = {
+            type: 'command',
+            payload: { command, params }
+        };
+        
+        this.socket.send(JSON.stringify(message));
+        return true;
     }
 
     subscribe(event, callback) {
@@ -72,17 +125,8 @@ class SocketManager {
         }
     }
 
-    sendCommand(command, params = {}) {
-        if (!this.socket?.connected) {
-            console.error('Not connected to drone');
-            return false;
-        }
-        this.socket.emit('command', { command, params });
-        return true;
-    }
-
     isConnected() {
-        return this.socket?.connected || false;
+        return this.connected && this.socket?.readyState === WebSocket.OPEN;
     }
 }
 
