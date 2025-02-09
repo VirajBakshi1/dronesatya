@@ -108,11 +108,12 @@ useEffect(() => {
     setIsConfirmationOpen(true);
   };
 
+  // Keep the confirmation dialog but remove state checks
   const handleConfirmation = async () => {
     const actionMap = {
       'Altitude Hold': 'altitude-hold',
       'Land': 'land',
-      'Return to Launch': 'rtl',
+      'Return to Launch': 'smart-rtl',  // Updated to match your backend command
       'Arm': 'arm',
       'Disarm': 'disarm'
     };
@@ -133,7 +134,6 @@ useEffect(() => {
 
     setIsConfirmationOpen(false);
   };
-
   const renderPWMValues = () => (
     <div className="mb-4 p-4 bg-gray-100 rounded-lg">
       <h3 className="font-bold mb-2">PWM Values</h3>
