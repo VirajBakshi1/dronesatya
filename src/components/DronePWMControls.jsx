@@ -62,6 +62,12 @@ useEffect(() => {
         if (data?.battery_level !== undefined) {
             setBatteryLevel(data.battery_level);
         }
+        if (data?.armed !== undefined) {
+            setArmed(data.armed);
+        }
+        if (data?.flight_mode !== undefined) {
+            setFlightMode(data.flight_mode);
+        }
     };
     socketManager.subscribe('telemetry', handleTelemetry);
 
@@ -105,25 +111,6 @@ useEffect(() => {
 
     pwmUpdateInterval.current = setInterval(updatePWMForHeldKeys, 100);
     return () => clearInterval(pwmUpdateInterval.current);
-  }, []);
-
-  // Status polling
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${API_URL}/status`);
-        const data = await response.json();
-        if (data.data) {
-          setPwmValues(data.data.pwm_values || pwmValues);
-          setArmed(data.data.armed || false);
-          setFlightMode(data.data.flight_mode || 'STABILIZE');
-        }
-      } catch (error) {
-        console.log('Status check failed:', error);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
   }, []);
 
   // API communication
