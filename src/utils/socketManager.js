@@ -1,24 +1,32 @@
 // socketManager.js
-
-const WS_URL = 'ws://172.29.172.210:5001/ws';
+const CONTROL_WS_URL = 'ws://172.29.172.210:5001/ws';
+const VIDEO_WS_URL = 'ws://172.29.172.210:5001/video';
 
 class SocketManager {
     constructor() {
+        // Existing control socket properties
         this.socket = null;
         this.connected = false;
         this.listeners = new Map();
         this.reconnectTimer = null;
+
+        // Add video socket properties
+        this.videoSocket = null;
+        this.videoConnected = false;
+        this.videoListeners = new Map(); // Separate listeners for video events
+        this.videoReconnectTimer = null;
     }
 
+    // Existing control socket methods remain the same
     connect() {
         if (this.socket) return;
 
         try {
-            console.log('Connecting to WebSocket...');
-            this.socket = new WebSocket(WS_URL);
+            console.log('Connecting to Control WebSocket...');
+            this.socket = new WebSocket(CONTROL_WS_URL);
 
             this.socket.onopen = () => {
-                console.log('WebSocket Connected');
+                console.log('Control WebSocket Connected');
                 this.connected = true;
                 this.notifyListeners('connection', { status: 'connected' });
                 if (this.reconnectTimer) {
@@ -28,7 +36,7 @@ class SocketManager {
             };
 
             this.socket.onclose = () => {
-                console.log('WebSocket Disconnected');
+                console.log('Control WebSocket Disconnected');
                 this.connected = false;
                 this.socket = null;
                 this.notifyListeners('connection', { status: 'disconnected' });
@@ -36,7 +44,7 @@ class SocketManager {
             };
 
             this.socket.onerror = (error) => {
-                console.error('WebSocket Error:', error);
+                console.error('Control WebSocket Error:', error);
                 this.notifyListeners('error', { error: error.message });
             };
 
@@ -47,12 +55,12 @@ class SocketManager {
                         this.notifyListeners(message.type, message.data);
                     }
                 } catch (error) {
-                    console.error('Message parsing error:', error);
+                    console.error('Control message parsing error:', error);
                 }
             };
 
         } catch (error) {
-            console.error('Connection error:', error);
+            console.error('Control connection error:', error);
             this.startReconnection();
         }
     }
@@ -60,7 +68,7 @@ class SocketManager {
     startReconnection() {
         if (!this.reconnectTimer) {
             this.reconnectTimer = setInterval(() => {
-                console.log('Attempting to reconnect...');
+                console.log('Attempting to reconnect control...');
                 this.connect();
             }, 2000);
         }
@@ -80,7 +88,7 @@ class SocketManager {
 
     sendCommand(command, params = {}) {
         if (!this.isConnected()) {
-            console.error('Not connected to WebSocket');
+            console.error('Not connected to Control WebSocket');
             return false;
         }
 
@@ -122,6 +130,101 @@ class SocketManager {
 
     isConnected() {
         return this.socket && this.socket.readyState === WebSocket.OPEN;
+    }
+
+    // Add video socket methods
+    connectVideo() {
+        if (this.videoSocket) return;
+
+        try {
+            console.log('Connecting to Video WebSocket...');
+            this.videoSocket = new WebSocket(VIDEO_WS_URL);
+
+            this.videoSocket.onopen = () => {
+                console.log('Video WebSocket Connected');
+                this.videoConnected = true;
+                this.notifyVideoListeners('connection', { status: 'connected' });
+                if (this.videoReconnectTimer) {
+                    clearInterval(this.videoReconnectTimer);
+                    this.videoReconnectTimer = null;
+                }
+            };
+
+            this.videoSocket.onclose = () => {
+                console.log('Video WebSocket Disconnected');
+                this.videoConnected = false;
+                this.videoSocket = null;
+                this.notifyVideoListeners('connection', { status: 'disconnected' });
+                this.startVideoReconnection();
+            };
+
+            this.videoSocket.onerror = (error) => {
+                console.error('Video WebSocket Error:', error);
+                this.notifyVideoListeners('error', { error: error.message });
+            };
+
+            this.videoSocket.onmessage = (event) => {
+                // Assuming video frames might not always be JSON, handle accordingly
+                // If video frames are JSON encoded, parse them like control messages
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type) {
+                        this.notifyVideoListeners(message.type, message.data);
+                    }
+                } catch (jsonError) {
+                    // If JSON parsing fails, assume it's raw video data (or handle differently)
+                    this.notifyVideoListeners('videoFrame', event.data); // Notify with raw data
+                    // console.log("Received raw video data:", event.data); // Optional logging for raw data
+                }
+            };
+        } catch (error) {
+            console.error('Video connection error:', error);
+            this.startVideoReconnection();
+        }
+    }
+
+    startVideoReconnection() {
+        if (!this.videoReconnectTimer) {
+            this.videoReconnectTimer = setInterval(() => {
+                console.log('Attempting to reconnect video...');
+                this.connectVideo();
+            }, 2000);
+        }
+    }
+
+    disconnectVideo() {
+        if (this.videoReconnectTimer) {
+            clearInterval(this.videoReconnectTimer);
+            this.videoReconnectTimer = null;
+        }
+        if (this.videoSocket) {
+            this.videoSocket.close();
+            this.videoSocket = null;
+        }
+        this.videoConnected = false;
+    }
+
+    subscribeVideo(event, callback) {
+        if (!this.videoListeners.has(event)) {
+            this.videoListeners.set(event, new Set());
+        }
+        this.videoListeners.get(event).add(callback);
+    }
+
+    unsubscribeVideo(event, callback) {
+        if (this.videoListeners.has(event)) {
+            this.videoListeners.get(event).delete(callback);
+        }
+    }
+
+    notifyVideoListeners(event, data) {
+        if (this.videoListeners.has(event)) {
+            this.videoListeners.get(event).forEach(callback => callback(data));
+        }
+    }
+
+    isVideoConnected() {
+        return this.videoSocket && this.videoSocket.readyState === WebSocket.OPEN;
     }
 }
 
