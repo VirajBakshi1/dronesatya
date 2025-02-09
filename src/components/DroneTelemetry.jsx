@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';
-
-// Replace with your Jetson's IP address
-const SOCKET_URL = 'http://172.29.172.210:5001';
+import socketManager from '../utils/socketManager';
 
 const DroneTelemetry = () => {
   const [telemetryData, setTelemetryData] = useState({
@@ -15,68 +12,44 @@ const DroneTelemetry = () => {
   });
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
-  const socketRef = useRef(null);
   const telemetryIntervalRef = useRef(null);
 
   useEffect(() => {
-    // Create socket connection
-    socketRef.current = io(SOCKET_URL, {
-      transports: ['polling', 'websocket'],
-      upgrade: true,
-      forceNew: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      timeout: 20000,
-      path: '/socket.io'
-    });
+    // Connect to drone
+    socketManager.connect();
 
-    const socket = socketRef.current;
-
-    // Connection handlers
-    socket.on('connect', () => {
-      console.log('Connected to server with ID:', socket.id);
-      setConnected(true);
+    // Connection status handler
+    const handleConnection = (data) => {
+      console.log('Connection status:', data.status);
+      setConnected(data.status === 'connected');
       setError('');
 
-      // Request initial telemetry data
-      socket.emit('request_telemetry');
+      if (data.status === 'connected') {
+        // Request initial telemetry data
+        socketManager.sendCommand('request_telemetry');
 
-      // Start requesting telemetry data periodically
-      telemetryIntervalRef.current = setInterval(() => {
-        socket.emit('request_telemetry');
-      }, 100); // 10Hz update rate
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('Disconnected from server:', reason);
-      setConnected(false);
-      if (telemetryIntervalRef.current) {
-        clearInterval(telemetryIntervalRef.current);
+        // Start requesting telemetry data periodically
+        telemetryIntervalRef.current = setInterval(() => {
+          socketManager.sendCommand('request_telemetry');
+        }, 100); // 10Hz update rate
+      } else {
+        if (telemetryIntervalRef.current) {
+          clearInterval(telemetryIntervalRef.current);
+        }
       }
-    });
+    };
+    socketManager.subscribe('connection', handleConnection);
 
-    socket.on('connect_error', (err) => {
-      console.error('Connection error:', err);
-      setError(`Connection error: ${err.message}`);
+    // Error handler
+    const handleError = (data) => {
+      console.error('Connection error:', data.error);
+      setError(`Connection error: ${data.error.message}`);
       setConnected(false);
-    });
-
-    socket.on('error', (err) => {
-      console.error('Socket error:', err);
-      setError(`Socket error: ${err.message}`);
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('Reconnected after', attemptNumber, 'attempts');
-    });
-
-    socket.on('reconnect_attempt', () => {
-      console.log('Attempting to reconnect...');
-    });
+    };
+    socketManager.subscribe('error', handleError);
 
     // Telemetry data handler
-    socket.on('telemetry', (data) => {
+    const handleTelemetry = (data) => {
       if (data) {
         console.log('Received telemetry:', data);
         setTelemetryData(prevData => ({
@@ -84,17 +57,19 @@ const DroneTelemetry = () => {
           ...data
         }));
       }
-    });
+    };
+    socketManager.subscribe('telemetry', handleTelemetry);
 
     // Cleanup on unmount
     return () => {
-      console.log('Cleaning up socket connection');
+      console.log('Cleaning up telemetry component');
       if (telemetryIntervalRef.current) {
         clearInterval(telemetryIntervalRef.current);
       }
-      if (socket) {
-        socket.disconnect();
-      }
+      socketManager.unsubscribe('connection', handleConnection);
+      socketManager.unsubscribe('error', handleError);
+      socketManager.unsubscribe('telemetry', handleTelemetry);
+      socketManager.disconnect();
     };
   }, []);
 
