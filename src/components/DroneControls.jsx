@@ -12,8 +12,7 @@ import {
 } from "./ui/alert-dialog";
 
 // Replace with your Jetson's IP address
-const API_URL = 'http://172.29.172.210:5001'
-const SOCKET_URL = 'ws://172.29.172.210:5001/socket.io/?EIO=4&transport=websocket'
+import socketManager from '../utils/socketManager';
 
 const DroneControls = () => {
   const [pressedKeys, setPressedKeys] = useState([]);
@@ -29,71 +28,54 @@ const DroneControls = () => {
   });
 
   // Socket.io setup
-  useEffect(() => {
-    const socket = io(SOCKET_URL);
+useEffect(() => {
+    // Connect to drone
+    socketManager.connect();
 
-    socket.on('connect', () => {
-      console.log('WebSocket Connected');
-    });
-
-    socket.on('pwm_values', (data) => {
-      setPwmValues(data);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('WebSocket Disconnected');
-    });
-
-    return () => {
-      socket.disconnect();
+    // Subscribe to PWM values
+    const handlePWM = (data) => {
+        setPwmValues(data);
     };
-  }, []);
+    socketManager.subscribe('pwm_values', handlePWM);
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${API_URL}/status`);
-        const data = await response.json();
-        setStatus(data);
-        if (data.data?.pwm_values) {
-          setPwmValues(data.data.pwm_values);
-        }
-      } catch (error) {
-        console.log('Status check failed:', error);
-      }
-    }, 1000);
+    // Subscribe to connection status
+    const handleConnection = (data) => {
+        setStatus(data.status === 'connected' ? { success: true } : { success: false });
+    };
+    socketManager.subscribe('connection', handleConnection);
 
-    return () => clearInterval(interval);
-  }, []);
+    // Subscribe to errors
+    const handleError = (data) => {
+        console.error('Connection error:', data.error);
+        setError('Failed to connect to drone');
+    };
+    socketManager.subscribe('error', handleError);
+
+    // Cleanup
+    return () => {
+        socketManager.unsubscribe('pwm_values', handlePWM);
+        socketManager.unsubscribe('connection', handleConnection);
+        socketManager.unsubscribe('error', handleError);
+        socketManager.disconnect();
+    };
+}, []);
 
   const sendCommand = async (command, params = {}) => {
     try {
-      console.log(`Sending command: ${command}`);
-      const response = await fetch(`${API_URL}/${command}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      });
-      const data = await response.json();
-      console.log(`Command ${command} response:`, data);
-
-      if (data.data?.pwm_values) {
-        setPwmValues(data.data.pwm_values);
-      }
-
-      if (!data.success && command !== 'status') {
-        setError(`Command sent: ${data.message}`);
-      }
-      return data;
+        console.log(`Sending command: ${command}`);
+        const success = socketManager.sendCommand(command, params);
+        
+        if (!success) {
+            setError('Failed to send command: Not connected');
+            return { success: false, message: 'Not connected' };
+        }
+        return { success: true };
     } catch (error) {
-      console.error('API call failed:', error);
-      setError('Failed to send command');
-      return { success: false, message: error.message };
+        console.error('API call failed:', error);
+        setError('Failed to send command');
+        return { success: false, message: error.message };
     }
-  };
-
+};
   const handleKeyDown = async (event) => {
     const key = event.key.toUpperCase();
     if (Object.keys(keyFunctions).includes(key) && !pressedKeys.includes(key)) {
