@@ -138,7 +138,7 @@ class SocketManager {
 
         try {
             console.log('Connecting to Video WebSocket...');
-            this.videoSocket = new WebSocket(VIDEO_WS_URL);
+            this.videoSocket = new WebSocket(`ws://172.29.172.210:5001/video`);
 
             this.videoSocket.onopen = () => {
                 console.log('Video WebSocket Connected');
@@ -150,32 +150,26 @@ class SocketManager {
                 }
             };
 
-            this.videoSocket.onclose = () => {
-                console.log('Video WebSocket Disconnected');
-                this.videoConnected = false;
-                this.videoSocket = null;
-                this.notifyVideoListeners('connection', { status: 'disconnected' });
-                this.startVideoReconnection();
+            this.videoSocket.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log('Received video message type:', message.type); // Debug log
+                    if (message.type === 'video_frame') {
+                        this.notifyVideoListeners(message.type, message.data);
+                    }
+                } catch (error) {
+                    console.error('Video message parsing error:', error);
+                }
             };
 
             this.videoSocket.onerror = (error) => {
                 console.error('Video WebSocket Error:', error);
-                this.notifyVideoListeners('error', { error: error.message });
             };
 
-            this.videoSocket.onmessage = (event) => {
-                // Assuming video frames might not always be JSON, handle accordingly
-                // If video frames are JSON encoded, parse them like control messages
-                try {
-                    const message = JSON.parse(event.data);
-                    if (message.type) {
-                        this.notifyVideoListeners(message.type, message.data);
-                    }
-                } catch (jsonError) {
-                    // If JSON parsing fails, assume it's raw video data (or handle differently)
-                    this.notifyVideoListeners('videoFrame', event.data); // Notify with raw data
-                    // console.log("Received raw video data:", event.data); // Optional logging for raw data
-                }
+            this.videoSocket.onclose = () => {
+                console.log('Video WebSocket Disconnected');
+                this.videoConnected = false;
+                this.startVideoReconnection();
             };
         } catch (error) {
             console.error('Video connection error:', error);
