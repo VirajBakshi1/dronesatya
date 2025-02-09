@@ -8,14 +8,22 @@ const DroneVideoFeed = () => {
         socketManager.connectVideo();
 
         const handleVideoFrame = (frameData) => {
-            // Assuming frameData is base64 encoded JPEG string
-            setImageData(`data:image/jpeg;base64,${frameData}`);
+            if (frameData && frameData.data) {  // Check if data exists
+                setImageData(`data:image/jpeg;base64,${frameData.data}`);
+            }
         };
 
-        socketManager.subscribeVideo('videoFrame', handleVideoFrame); // Subscribe to 'videoFrame' event
+        // Change 'videoFrame' to 'video_frame' to match backend
+        socketManager.subscribeVideo('video_frame', handleVideoFrame);
+
+        // Add some logging
+        socketManager.subscribeVideo('connection', (status) => {
+            console.log('Video connection status:', status);
+        });
 
         return () => {
-            socketManager.unsubscribeVideo('videoFrame', handleVideoFrame); // Unsubscribe from 'videoFrame'
+            socketManager.unsubscribeVideo('video_frame', handleVideoFrame);
+            socketManager.unsubscribeVideo('connection');
             socketManager.disconnectVideo();
         };
     }, []);
