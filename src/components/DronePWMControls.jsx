@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 // Connection URLs
-const API_URL = "http://172.29.172.210:5001"
-const SOCKET_URL = "http://172.29.172.210:5001"
+import socketManager from '../utils/socketManager';
 
 const DronePWMControl = () => {
   // State management
@@ -48,54 +47,52 @@ const DronePWMControl = () => {
   ];
 
   // Socket.io setup
-  useEffect(() => {
-    const socket = io(SOCKET_URL, {
-        transports: ['polling'],
-        reconnection: false,
-        path: '/socket.io' // Added path configuration
-    });
+useEffect(() => {
+    // Connect to drone
+    socketManager.connect();
 
-    socket.on('connect', () => {
-        console.log('Connected:', socket.id);
-        setError(null);
-    });
-
-    socket.on('connect_error', (error) => {
-        console.error('Connection failed:', error);
-        setError(`Socket connection error: ${error.message || 'Unknown error'}`); // Update error state
-    });
-
-    socket.on('disconnect', (reason) => {
-        console.log('Disconnected:', reason);
-    });
-
-
-    socket.on('pwm_values', (data) => {
-        try {
-            console.log('Received PWM values:', data);
-            if (data) setPwmValues(data);
-        } catch (error) {
-            console.error("Error in PWM handler:", error);
-        }
-    });
-
-    socket.on('telemetry', (data) => {
-        try {
-            console.log('Received telemetry:', data);
-            if (data && data.battery_level !== undefined) {
-                setBatteryLevel(data.battery_level);
-            }
-        } catch (error) {
-            console.error("Error in telemetry handler:", error);
-        }
-    });
-
-
-    return () => {
-        console.log('Socket cleanup');
-        socket.disconnect();
+    // Subscribe to PWM values
+    const handlePWM = (data) => {
+        if (data) setPwmValues(data);
     };
-}, []); // Empty dependency array
+    socketManager.subscribe('pwm_values', handlePWM);
+
+    // Subscribe to telemetry
+    const handleTelemetry = (data) => {
+        if (data?.battery_level !== undefined) {
+            setBatteryLevel(data.battery_level);
+        }
+    };
+    socketManager.subscribe('telemetry', handleTelemetry);
+
+    // Subscribe to connection status
+    const handleConnection = (data) => {
+        setError(null);
+        if (data.status === 'connected') {
+            console.log('Connected:', socketManager.socket.id);
+        } else {
+            console.log('Disconnected');
+        }
+    };
+    socketManager.subscribe('connection', handleConnection);
+
+    // Subscribe to errors
+    const handleError = (data) => {
+        console.error('Connection failed:', data.error);
+        setError(`Socket connection error: ${data.error.message || 'Unknown error'}`);
+    };
+    socketManager.subscribe('error', handleError);
+
+    // Cleanup subscriptions
+    return () => {
+        socketManager.unsubscribe('pwm_values', handlePWM);
+        socketManager.unsubscribe('telemetry', handleTelemetry);
+        socketManager.unsubscribe('connection', handleConnection);
+        socketManager.unsubscribe('error', handleError);
+        socketManager.disconnect();
+    };
+}, []);
+  // Empty dependency array
 
 
   // Continuous PWM update for held keys
@@ -130,41 +127,18 @@ const DronePWMControl = () => {
   }, []);
 
   // API communication
-  const sendCommand = async (command, params = {}) => {
+const sendCommand = async (command, params = {}) => {
     try {
-      setError(null);
-      console.log(`Sending command: ${command}`);
-      const response = await fetch(`${API_URL}/${command}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(params),
-      });
-      const data = await response.json();
-      console.log(`Command ${command} response:`, data);
-
-      if (data.data?.pwm_values) {
-        setPwmValues(data.data.pwm_values);
-      }
-      if (data.data?.armed !== undefined) {
-        setArmed(data.data.armed);
-      }
-      if (data.data?.flight_mode) {
-        setFlightMode(data.data.flight_mode);
-      }
-
-      if (!data.success) {
-        setError(data.message);
-      }
-      return data;
+        setError(null);
+        console.log(`Sending command: ${command}`);
+        return socketManager.sendCommand(command, params);
     } catch (error) {
-      const errorMessage = error.message || 'Command failed';
-      setError(errorMessage);
-      console.error('API call failed:', error);
-      return null;
+        const errorMessage = error.message || 'Command failed';
+        setError(errorMessage);
+        console.error('Command failed:', error);
+        return false;
     }
-  };
+};
 
   // Handle flight mode actions
   const handleFlightAction = async (action) => {
