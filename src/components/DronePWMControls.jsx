@@ -39,11 +39,11 @@ const DronePWMControl = () => {
   // Flight mode actions with updated configuration
   const flightActions = [
     { name: 'Arm', endpoint: 'arm', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false },
-    { name: 'Disarm', endpoint: 'disarm', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: true },
-    { name: 'Altitude Hold', endpoint: 'altitude-hold', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: true },
-    { name: 'Loiter', endpoint: 'loiter', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: true },
-    { name: 'Smart RTL', endpoint: 'smart-rtl', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: true },
-    { name: 'Land', endpoint: 'land', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: true }
+    { name: 'Disarm', endpoint: 'disarm', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false },
+    { name: 'Altitude Hold', endpoint: 'altitude-hold', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false },
+    { name: 'Loiter', endpoint: 'loiter', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false },
+    { name: 'Smart RTL', endpoint: 'smart-rtl', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false },
+    { name: 'Land', endpoint: 'land', color: 'bg-slate-700 hover:bg-slate-500', requiresArmed: false }
   ];
 
   // Socket.io setup
