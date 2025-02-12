@@ -10,12 +10,17 @@ const WaypointDropbox = () => {
   return (
     <div className="border border-gray-300 p-4 rounded">
       <h2 className="text-xl font-bold mb-2">Waypoint Dropbox</h2>
-      <input
-        type="file"
-        accept=".waypoints"
-        onChange={handleFileUpload}
-        className="border border-gray-300 p-2 rounded"
-      />
+      <div className="flex items-center space-x-2">
+        <input
+          type="file"
+          accept=".waypoints"
+          onChange={handleFileUpload}
+          className="border border-gray-300 p-2 rounded"
+        />
+        <button className="px-4 py-2 bg-blue-600 text-white rounded">
+          Run
+        </button>
+      </div>
     </div>
   );
 };

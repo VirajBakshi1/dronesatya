@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { io } from 'socket.io-client';
+import socketManager from '../utils/socketManager';
 import L from 'leaflet';
 
 // Fix for default marker icon
@@ -38,12 +38,12 @@ const DroneMap = () => {
     latitude: 0,
     longitude: 0,
     altitudeMSL: 0,
-    altitudeRelative: 0,
-    gpsFix: 0,
-    satellites: 0
+    armed: false,
+    flight_mode: '',
+    connected: false
   });
   const [pathHistory, setPathHistory] = useState([]);
-  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState(null);
   const maxPathPoints = 100;
 
   // Memoize the current position
@@ -53,49 +53,74 @@ const DroneMap = () => {
   );
 
   useEffect(() => {
-    const socket = io('http://172.29.172.210:5001', {   // Changed only this line
-      transports: ['polling', 'websocket'],
-      upgrade: true,
-      rememberUpgrade: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-      autoConnect: true,
-      withCredentials: true
-    });
+    // Connect to drone
+    socketManager.connect();
 
-    socket.on('connect', () => {
-      console.log('Map connected to telemetry server');
-      setConnected(true);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Map disconnected from telemetry server');
-      setConnected(false);
-    });
-
-    socket.on('telemetry', (data) => {
-      if (data && data.latitude && data.longitude) {
-        setTelemetryData(data);
+    const handleTelemetry = (data) => {
+      if (data) {
+        console.log('Map received telemetry:', data); // Debug log
+        setTelemetryData(prevData => ({
+          ...prevData,
+          ...data
+        }));
         
-        // Update path history
-        const newPosition = [data.latitude, data.longitude];
-        setPathHistory(prev => {
-          const newHistory = [...prev, newPosition];
-          return newHistory.slice(-maxPathPoints);
-        });
+        // Update path history only if we have valid coordinates
+        if (data.latitude !== 0 && data.longitude !== 0) {
+          const newPosition = [data.latitude, data.longitude];
+          setPathHistory(prev => {
+            const newHistory = [...prev, newPosition];
+            return newHistory.slice(-maxPathPoints);
+          });
+        }
       }
-    });
+    };
+
+    const handleConnection = (data) => {
+      setError(null);
+      if (data.status === 'connected') {
+        console.log('Connected:', socketManager.socket.id);
+        setTelemetryData(prev => ({
+          ...prev,
+          connected: true
+        }));
+      } else {
+        console.log('Disconnected');
+        setTelemetryData(prev => ({
+          ...prev,
+          connected: false
+        }));
+      }
+    };
+
+    const handleError = (data) => {
+      console.error('Connection error:', data.error);
+      setError(`Connection error: ${data.error.message || 'Unknown error'}`);
+      setTelemetryData(prev => ({
+        ...prev,
+        connected: false
+      }));
+    };
+
+    socketManager.subscribe('telemetry', handleTelemetry);
+    socketManager.subscribe('connection', handleConnection);
+    socketManager.subscribe('error', handleError);
 
     return () => {
-      socket.disconnect();
+      socketManager.unsubscribe('telemetry', handleTelemetry);
+      socketManager.unsubscribe('connection', handleConnection);
+      socketManager.unsubscribe('error', handleError);
+      socketManager.disconnect();
     };
   }, []);
 
   return (
     <div className="w-full h-[500px] relative">
+      {error && (
+        <div className="absolute top-0 left-0 right-0 z-[2000] bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
       <MapContainer 
         center={position} 
         zoom={18} 
@@ -106,7 +131,7 @@ const DroneMap = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         
-        {/* Dynamic marker position */}
+        {/* Show marker only if we have valid coordinates */}
         {position[0] !== 0 && position[1] !== 0 && (
           <Marker 
             position={position} 
@@ -114,12 +139,12 @@ const DroneMap = () => {
           >
             <Popup>
               <div className="text-sm">
-                <div className="font-bold mb-1">Drone Location</div>
+                <div className="font-bold mb-1">Drone Status</div>
                 <div>Latitude: {telemetryData.latitude.toFixed(6)}°</div>
                 <div>Longitude: {telemetryData.longitude.toFixed(6)}°</div>
-                <div>Altitude: {telemetryData.altitudeMSL.toFixed(2)}m</div>
-                <div>GPS Fix: {telemetryData.gpsFix}D</div>
-                <div>Satellites: {telemetryData.satellites}</div>
+                <div>Altitude MSL: {telemetryData.altitudeMSL.toFixed(2)}m</div>
+                <div>Armed: {telemetryData.armed ? 'Yes' : 'No'}</div>
+                <div>Mode: {telemetryData.flight_mode}</div>
               </div>
             </Popup>
           </Marker>
@@ -139,14 +164,28 @@ const DroneMap = () => {
         <MapUpdater position={position} />
       </MapContainer>
 
-      {/* Connection status */}
-      <div className="absolute top-4 right-4 z-[1000] bg-white p-2 rounded shadow">
+      {/* Connection status and flight mode indicators */}
+      <div className="absolute top-4 right-4 z-[1000] bg-white p-2 rounded shadow space-y-2">
         <div className="flex items-center gap-2">
-          <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className={`w-3 h-3 rounded-full ${telemetryData.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
           <span className="text-sm font-medium">
-            {connected ? 'Connected' : 'Disconnected'}
+            {telemetryData.connected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
+        {telemetryData.connected && (
+          <div className="text-sm">
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                telemetryData.armed ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {telemetryData.armed ? 'ARMED' : 'DISARMED'}
+              </span>
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-semibold">
+                {telemetryData.flight_mode || 'UNKNOWN'}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
