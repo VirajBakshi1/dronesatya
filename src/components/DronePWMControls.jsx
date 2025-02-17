@@ -2,12 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import socketManager from '../utils/socketManager';
 
 const DronePWMControl = () => {
-  // A fixed PWM step; adjust as needed
   const PWM_STEP = 50;
-  // Initial PWM baseline; adjust as needed
   const INITIAL_PWM = { throttle: 1000, yaw: 1500, pitch: 1500, roll: 1500 };
 
-  // State management
   const [pwmValues, setPwmValues] = useState(INITIAL_PWM);
   const [pendingPWM, setPendingPWM] = useState(INITIAL_PWM);
   const [flightMode, setFlightMode] = useState('STABILIZE');
@@ -17,37 +14,33 @@ const DronePWMControl = () => {
   const [actionInProgress, setActionInProgress] = useState(null);
   const [pendingFlightAction, setPendingFlightAction] = useState(null);
   const [pressedKeys, setPressedKeys] = useState(new Set());
-  // Toggle for auto-updating PWM values via keyboard
   const [autoPWMUpdate, setAutoPWMUpdate] = useState(false);
-  // New state for the modal: which button is selected ('confirm' or 'cancel')
   const [selectedModalButton, setSelectedModalButton] = useState('confirm');
 
-  // Refs for key presses and intervals
   const pressedKeysRef = useRef(new Set());
   const pwmUpdateInterval = useRef(null);
   const modalRef = useRef(null);
 
-  // Define flightActions array in component scope.
   const flightActions = [
-    { name: 'Arm', endpoint: 'arm', color: 'bg-slate-700 hover:bg-slate-500' },
-    { name: 'Disarm', endpoint: 'disarm', color: 'bg-slate-700 hover:bg-slate-500' },
-    { name: 'Altitude Hold', endpoint: 'altitude-hold', color: 'bg-slate-700 hover:bg-slate-500' },
-    { name: 'Loiter', endpoint: 'loiter', color: 'bg-slate-700 hover:bg-slate-500' },
-    { name: 'Smart RTL', endpoint: 'smart-rtl', color: 'bg-slate-700 hover:bg-slate-500' },
-    { name: 'Land', endpoint: 'land', color: 'bg-slate-700 hover:bg-slate-500' }
+    { name: 'Arm', endpoint: 'arm', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Disarm', endpoint: 'disarm', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Altitude Hold', endpoint: 'altitude-hold', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Loiter', endpoint: 'loiter', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Smart RTL', endpoint: 'smart-rtl', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Land', endpoint: 'land', color: 'bg-slate-700 hover:bg-slate-600' },
   ];
 
-  // Key mapping configuration
   const keyMappings = {
-    'w': { action: 'Throttle Up', control: 'throttle', increment: true },
-    's': { action: 'Throttle Down', control: 'throttle', increment: false },
-    'a': { action: 'Yaw Left', control: 'yaw', increment: false },
-    'd': { action: 'Yaw Right', control: 'yaw', increment: true },
-    'arrowup': { action: 'Pitch Forward', control: 'pitch', increment: false },
-    'arrowdown': { action: 'Pitch Backward', control: 'pitch', increment: true },
-    'arrowleft': { action: 'Roll Left', control: 'roll', increment: false },
-    'arrowright': { action: 'Roll Right', control: 'roll', increment: true }
+    w: { action: 'Throttle Up', control: 'throttle', increment: true },
+    s: { action: 'Throttle Down', control: 'throttle', increment: false },
+    a: { action: 'Yaw Left', control: 'yaw', increment: false },
+    d: { action: 'Yaw Right', control: 'yaw', increment: true },
+    p: { action: 'Pitch Forward', control: 'pitch', increment: false },
+    ';': { action: 'Pitch Backward', control: 'pitch', increment: true },
+    l: { action: 'Roll Left', control: 'roll', increment: false },
+    "'": { action: 'Roll Right', control: 'roll', increment: true },
   };
+  
 
   // Socket.io setup
   useEffect(() => {
@@ -109,7 +102,7 @@ const DronePWMControl = () => {
       pressedKeysRef.current.forEach((key) => {
         const mapping = keyMappings[key];
         if (mapping) {
-          setPendingPWM(prev => {
+          setPendingPWM((prev) => {
             const currentValue = prev[mapping.control];
             const newValue = mapping.increment
               ? Math.min(currentValue + PWM_STEP, 2000)
@@ -137,7 +130,7 @@ const DronePWMControl = () => {
     if (autoPWMUpdate) {
       interval = setInterval(() => {
         handlePWMChangeNow();
-      }, 300); // Adjust interval as needed
+      }, 300);
     }
     return () => {
       if (interval) clearInterval(interval);
@@ -186,30 +179,26 @@ const DronePWMControl = () => {
     }
   };
 
-  // "Change Now" sends the pending PWM values (used by auto-update)
+  // "Change Now" sends the pending PWM values
   const handlePWMChangeNow = async () => {
     try {
       setError(null);
-      console.log("Sending pending PWM values:", pendingPWM);
+      console.log('Sending pending PWM values:', pendingPWM);
       const result = await sendCommand('set_pwm', pendingPWM);
       if (result && result.success) {
-        console.log("PWM update successful");
+        console.log('PWM update successful');
       } else {
-        console.error("PWM update failed:", result);
-        setError(result?.message || "Failed to update PWM values");
+        console.error('PWM update failed:', result);
+        setError(result?.message || 'Failed to update PWM values');
       }
     } catch (error) {
       setError(`Error: ${error.message}`);
     }
   };
 
-  // Process key events for PWM only if autoPWMUpdate is enabled.
+  // Key events for PWM
   const handleKeyDown = (event) => {
-    // Allow flight action confirmation keys even when autoPWMUpdate is disabled.
-    if (pendingFlightAction) {
-      // Do nothing here; modal handles its own key events.
-      return;
-    }
+    if (pendingFlightAction) return;
     if (!autoPWMUpdate) return;
 
     const key = event.key.toLowerCase();
@@ -234,13 +223,12 @@ const DronePWMControl = () => {
     }
   };
 
-  // Dedicated key handler for the modal
+  // Modal key handler
   const handleModalKeyDown = (event) => {
     event.stopPropagation();
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Tab') {
+    if (['ArrowLeft', 'ArrowRight', 'Tab'].includes(event.key)) {
       event.preventDefault();
-      // Toggle selection between 'confirm' and 'cancel'
-      setSelectedModalButton(prev => (prev === 'confirm' ? 'cancel' : 'confirm'));
+      setSelectedModalButton((prev) => (prev === 'confirm' ? 'cancel' : 'confirm'));
     } else if (event.key === 'Enter') {
       event.preventDefault();
       if (selectedModalButton === 'confirm') {
@@ -253,26 +241,28 @@ const DronePWMControl = () => {
     }
   };
 
-  // Render a simple PWM gauge
+  // Enhanced PWM gauge rendering
   const renderPWMGauge = (label, value, control) => {
     const percentage = ((value - 1000) / 1000) * 100;
     const isActive = Array.from(pressedKeysRef.current).some(
-      key => keyMappings[key].control === control
+      (key) => keyMappings[key].control === control
     );
 
     return (
-      <div className="mb-4">
-        <div className="flex justify-between mb-1">
-          <span className={`font-semibold ${isActive ? 'text-blue-600' : ''}`}>
-            {label}
+      <div className="mb-6" key={control}>
+        <div className="flex items-center justify-between mb-2">
+          <span className={`font-light tracking-wider ${isActive ? 'text-blue-400' : 'text-gray-300'}`}>
+            {label.toUpperCase()}
           </span>
-          <span>{value}</span>
+          <span className="font-mono text-gray-400">{value}</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5">
+        <div className="w-full bg-slate-950/50 rounded-full h-2 border border-gray-800">
           <div
-            className={`h-2.5 rounded-full transition-all duration-300 ${isActive ? 'bg-blue-600' : 'bg-blue-400'}`}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              isActive ? 'bg-blue-500' : 'bg-blue-400/50'
+            }`}
             style={{ width: `${percentage}%` }}
-          ></div>
+          />
         </div>
       </div>
     );
@@ -280,7 +270,7 @@ const DronePWMControl = () => {
 
   return (
     <div
-      className="p-6 bg-slate-900 text-white rounded-lg shadow-lg max-w-2xl mx-auto"
+      className="bg-slate-900/50 text-white rounded-lg shadow-lg border border-gray-800 backdrop-blur-sm shadow-slate-900/50 max-w-5xl mx-auto p-6"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
@@ -288,107 +278,128 @@ const DronePWMControl = () => {
     >
       {/* Error Display */}
       {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg tracking-wider font-light">
           {error}
         </div>
       )}
 
-      {/* Status Bar */}
-      <div className="mb-6 flex items-center justify-between bg-gray-800 p-3 rounded-lg">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center">
-            <span className="font-bold mr-2">Status:</span>
-            <span className={`px-2 py-1 rounded ${armed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {armed ? 'Armed' : 'Disarmed'}
-            </span>
-          </div>
-          <div className="flex items-center">
-            <span className="font-bold mr-2">Mode:</span>
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
-              {flightMode}
-            </span>
-          </div>
-          {batteryLevel !== null && (
-            <div className="flex items-center">
-              <span className="font-bold mr-2">Battery:</span>
-              <span className={`px-2 py-1 rounded ${batteryLevel > 20 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {batteryLevel}%
-              </span>
+      {/* Three-Column Layout */}
+      <div className="flex flex-row space-x-8">
+        {/* Column 1: Status & Flight Controls */}
+        <div className="w-1/3 space-y-6">
+          {/* Status Bar */}
+          <div className="bg-slate-800/50 p-6 rounded-lg border border-gray-800 space-y-4">
+            <div className="flex flex-col space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 tracking-wider">STATUS</span>
+                <span className={`px-3 py-1 rounded-md text-xs tracking-wider font-light ${
+                  armed 
+                    ? 'bg-green-500/20 text-green-300 border border-green-500/30' 
+                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                }`}>
+                  {armed ? 'ARMED' : 'DISARMED'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 tracking-wider">MODE</span>
+                <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-md text-xs tracking-wider font-light border border-blue-500/30">
+                  {flightMode}
+                </span>
+              </div>
+              {batteryLevel !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 tracking-wider">BATTERY</span>
+                  <span className={`px-3 py-1 rounded-md text-xs tracking-wider font-light ${
+                    batteryLevel > 20
+                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                      : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                  }`}>
+                    {batteryLevel}%
+                  </span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {/* PWM Values Display */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold mb-4">PWM Values</h2>
-        {renderPWMGauge('Throttle', pendingPWM.throttle, 'throttle')}
-        {renderPWMGauge('Yaw', pendingPWM.yaw, 'yaw')}
-        {renderPWMGauge('Pitch', pendingPWM.pitch, 'pitch')}
-        {renderPWMGauge('Roll', pendingPWM.roll, 'roll')}
-        {/* Toggle slider replaces the "Change Now" button */}
-        <div className="mt-4 flex items-center">
-          <span className="mr-2">Auto Update PWM:</span>
-          <button
-            onClick={() => setAutoPWMUpdate(prev => !prev)}
-            className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${
-              autoPWMUpdate ? 'bg-green-500' : 'bg-red-500'
-            }`}
-          >
-            <span
-              className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                autoPWMUpdate ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            ></span>
-          </button>
+          {/* Flight Controls */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-light tracking-wider">FLIGHT CONTROLS</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {flightActions.map((action) => {
+                const isLoading = actionInProgress === action.endpoint;
+                return (
+                  <button
+                    key={action.name}
+                    onClick={() => setPendingFlightAction(action)}
+                    className={`px-4 py-2 rounded-lg font-light tracking-wider text-white
+                      bg-slate-800/50 hover:bg-slate-700/50 border border-gray-800
+                      ${isLoading ? 'animate-pulse' : ''}`}
+                  >
+                    {isLoading ? 'PROCESSING...' : action.name.toUpperCase()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Flight Controls */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold mb-4">Flight Controls</h2>
-        <div className="grid grid-cols-3 gap-4">
-          {flightActions.map((action) => {
-            const isLoading = actionInProgress === action.endpoint;
-            return (
+        {/* Column 2: PWM Values & Toggle */}
+        <div className="w-1/3 space-y-6">
+          <div className="space-y-4">
+            <h2 className="text-lg font-light tracking-wider">PWM VALUES</h2>
+            {/* Gauges */}
+            {renderPWMGauge('Throttle', pendingPWM.throttle, 'throttle')}
+            {renderPWMGauge('Yaw', pendingPWM.yaw, 'yaw')}
+            {renderPWMGauge('Pitch', pendingPWM.pitch, 'pitch')}
+            {renderPWMGauge('Roll', pendingPWM.roll, 'roll')}
+
+            {/* Auto Update Toggle */}
+            <div className="flex items-center justify-between mt-6 bg-slate-800/50 p-4 rounded-lg border border-gray-800">
+              <span className="text-gray-300 tracking-wider">AUTO UPDATE PWM</span>
               <button
-                key={action.name}
-                onClick={() => setPendingFlightAction(action)}
-                className={`px-4 py-2 rounded text-white font-semibold ${action.color} transition-colors ${isLoading ? 'animate-pulse' : ''}`}
+                onClick={() => setAutoPWMUpdate((prev) => !prev)}
+                className={`relative inline-flex items-center h-6 rounded-full w-12 transition-colors ${
+                  autoPWMUpdate ? 'bg-green-500/50' : 'bg-red-500/50'
+                } border ${autoPWMUpdate ? 'border-green-500/30' : 'border-red-500/30'}`}
               >
-                {isLoading ? 'Processing...' : action.name}
+                <span
+                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                    autoPWMUpdate ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Control Instructions */}
-      <div className="bg-gray-800 p-4 rounded-lg">
-        <h3 className="font-bold mb-3">Control Mapping</h3>
-        <div className="grid grid-cols-2 gap-y-2 text-sm">
-          {Object.entries(keyMappings).map(([key, { action }]) => (
-            <div key={key} className="flex items-center">
-              <span className={`inline-flex items-center justify-center w-8 h-8 rounded text-black bg-gray-200 mr-2 font-mono ${
-                pressedKeysRef.current.has(key) ? 'bg-blue-500 text-white' : ''
-              }`}>
-                {key === 'arrowup'
-                  ? '↑'
-                  : key === 'arrowdown'
-                  ? '↓'
-                  : key === 'arrowleft'
-                  ? '←'
-                  : key === 'arrowright'
-                  ? '→'
-                  : key.toUpperCase()}
-              </span>
-              <span>{action}</span>
             </div>
-          ))}
+          </div>
+        </div>
+
+        {/* Column 3: Control Mapping */}
+        <div className="w-1/3 space-y-4">
+          <div className="bg-slate-800/50 p-6 rounded-lg border border-gray-800">
+            <h3 className="text-lg font-light tracking-wider mb-6">CONTROL MAPPING</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {Object.entries(keyMappings).map(([key, { action }]) => {
+                const isPressed = pressedKeysRef.current.has(key);
+                const displayKey = key === 'p' ? 'P' : key === ';' ? ';' : key === 'l' ? 'L' : key === "'" ? "'" : key.toUpperCase();
+                return (
+                  <div key={key} className="flex items-center space-x-3">
+                    <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg 
+                      border font-mono text-sm transition-all duration-300 ${
+                      isPressed 
+                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' 
+                        : 'bg-slate-900/50 text-gray-400 border-gray-800'
+                    }`}>
+                      {displayKey}
+                    </span>
+                    <span className="text-gray-400 text-sm tracking-wider">{action}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Confirmation Modal for Flight Actions */}
+      {/* Confirmation Modal - Enhanced */}
       {pendingFlightAction && (
         <div
           className="fixed inset-0 flex items-center justify-center z-50"
@@ -396,36 +407,38 @@ const DronePWMControl = () => {
           tabIndex={0}
           ref={modalRef}
         >
-          <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-slate-900 text-white p-6 rounded-lg shadow-lg z-10">
-            <h3 className="text-lg font-bold mb-4">Confirm Action</h3>
-            <p className="mb-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="bg-slate-900/90 text-white p-8 rounded-lg shadow-lg border border-gray-800 backdrop-blur-sm z-10 max-w-md w-full">
+            <h3 className="text-xl font-light tracking-wider mb-4">CONFIRM ACTION</h3>
+            <p className="mb-6 text-gray-300 tracking-wide">
               Are you sure you want to execute{' '}
-              <span className="font-semibold">{pendingFlightAction.name}</span>?
+              <span className="text-blue-400">{pendingFlightAction.name.toUpperCase()}</span>?
             </p>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setPendingFlightAction(null)}
-                className={`px-4 py-2 rounded bg-red-600 hover:bg-red-500 ${
-                  selectedModalButton === 'cancel' ? 'ring-2 ring-blue-500' : ''
-                }`}
+                className={`px-6 py-3 rounded-lg tracking-wider font-light
+                  ${selectedModalButton === 'cancel' 
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/30 ring-2 ring-red-500/50' 
+                    : 'bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/20'}`}
               >
-                Cancel
+                CANCEL
               </button>
               <button
                 onClick={async () => {
                   await handleFlightAction(pendingFlightAction);
                   setPendingFlightAction(null);
                 }}
-                className={`px-4 py-2 rounded bg-green-600 hover:bg-green-500 ${
-                  selectedModalButton === 'confirm' ? 'ring-2 ring-blue-500' : ''
-                }`}
+                className={`px-6 py-3 rounded-lg tracking-wider font-light
+                  ${selectedModalButton === 'confirm' 
+                    ? 'bg-green-500/20 text-green-300 border border-green-500/30 ring-2 ring-green-500/50' 
+                    : 'bg-green-500/10 text-green-300 border border-green-500/20 hover:bg-green-500/20'}`}
               >
-                Confirm
+                CONFIRM
               </button>
             </div>
-            <p className="mt-2 text-sm text-gray-400">
-              Use Left/Right arrow keys to select and Enter to confirm.
+            <p className="mt-4 text-sm text-gray-500 tracking-wider">
+              Use Arrow Keys to navigate • Enter to confirm • ESC to cancel
             </p>
           </div>
         </div>
