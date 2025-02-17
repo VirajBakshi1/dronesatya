@@ -11,6 +11,19 @@ const GradientText = ({ text, className }) => {
     setMousePosition({ x });
   }, [isHovering]);
 
+  const gradientStyle = {
+    backgroundImage: `linear-gradient(90deg, #60A5FA ${mousePosition.x - 50}%, #8B5CF6 ${mousePosition.x + 50}%)`,
+    backgroundSize: '100%',
+    backgroundClip: 'text',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    color: 'transparent',
+    textShadow: '0 0 20px rgba(255, 255, 255, 0.1)',
+    display: 'inline-block',
+    fontWeight: 300,
+    transition: 'all 300ms ease-in-out, background-image 0ms'
+  };
+
   return (
     <div
       onMouseMove={handleMouseMove}
@@ -20,20 +33,7 @@ const GradientText = ({ text, className }) => {
     >
       <h1
         className={`${className}`}
-        style={{
-          backgroundImage: isHovering
-            ? `linear-gradient(90deg, #60A5FA ${mousePosition.x - 50}%, #8B5CF6 ${mousePosition.x + 50}%)`
-            : 'none',
-          backgroundSize: '100%',
-          backgroundClip: 'text',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: isHovering ? 'transparent' : 'white',
-          color: isHovering ? 'transparent' : 'white',
-          textShadow: '0 0 20px rgba(255, 255, 255, 0.1)',
-          display: 'inline-block',
-          fontWeight: 300,
-          transition: 'all 300ms ease-in-out, background-image 0ms'
-        }}
+        style={gradientStyle}
       >
         {text}
       </h1>

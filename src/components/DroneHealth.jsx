@@ -1,53 +1,90 @@
 import React, { useState, useEffect, useRef } from 'react';
 import socketManager from '../utils/socketManager';
+import { Search, Pause, Play, XCircle } from 'lucide-react';
 
 const DroneHealth = () => {
   const [mavrosOutput, setMavrosOutput] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isPaused, setIsPaused] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    INFO: true,
+    WARN: true,
+    ERROR: true,
+    OTHER: true
+  });
   const outputRef = useRef(null);
 
   useEffect(() => {
-    console.log("DroneHealth: Initializing..."); // Debug print
-
     socketManager.connect();
-    console.log("DroneHealth: Socket connection initiated");
 
     const handleMavrosOutput = (data) => {
-      console.log("DroneHealth: Raw MAVROS data received:", data); // More detailed debug
-      console.log("DroneHealth: Data type:", data?.type);          // Check message type
-      console.log("DroneHealth: Data content:", data?.data);       // Check data structure
-
-      if (data?.data?.output) {
-        console.log("DroneHealth: Adding output to state:", data.data.output); // Debug print
+      if (data?.output && !isPaused) {
         setMavrosOutput(prev => {
-          console.log("DroneHealth: Previous outputs:", prev); // Debug print
-          return [...prev, data.data.output];
+          const newOutput = [...prev, data.output];
+          return newOutput.slice(-1000);
         });
-
-        // Auto-scroll to bottom
-        if (outputRef.current) {
-          console.log("DroneHealth: Scrolling to bottom"); // Debug print
+        
+        if (outputRef.current && !isPaused) {
           outputRef.current.scrollTop = outputRef.current.scrollHeight;
         }
-      } else {
-        console.log("DroneHealth: Received data but no output found in structure"); // Debug print
       }
     };
 
     socketManager.subscribe('mavros_output', handleMavrosOutput);
-    console.log("DroneHealth: Subscribed to mavros_output");
-
-    // Debug the socket connection status
-    console.log("DroneHealth: Socket state:", socketManager.socket?.connected);
-
+    
     return () => {
-      console.log("DroneHealth: Cleaning up..."); // Debug print
       socketManager.unsubscribe('mavros_output', handleMavrosOutput);
-      console.log("DroneHealth: Unsubscribed from mavros_output");
     };
-  }, []);
+  }, [isPaused]);
 
-  // Debug render
-  console.log("DroneHealth: Current output array length:", mavrosOutput.length);
+  const getMessageType = (message) => {
+    if (message.includes('[ERROR]')) return 'ERROR';
+    if (message.includes('[WARN]')) return 'WARN';
+    if (message.includes('[INFO]')) return 'INFO';
+    return 'OTHER';
+  };
+
+  const getMessageColor = (type) => {
+    switch (type) {
+      case 'ERROR': return 'text-red-400';
+      case 'WARN': return 'text-yellow-400';
+      case 'INFO': return 'text-gray-100';
+      case 'OTHER': return 'text-green-400';
+      default: return 'text-gray-300';
+    }
+  };
+
+  const getFilterStyle = (type, isActive) => {
+    if (!isActive) return 'bg-slate-800 text-gray-500 border-gray-700';
+    
+    switch (type) {
+      case 'ERROR':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'WARN':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'INFO':
+        return 'bg-gray-100/90 text-black border-gray-300/30';
+      case 'OTHER':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      default:
+        return 'bg-slate-800 text-gray-500 border-gray-700';
+    }
+  };
+
+  const getFilterLabel = (type) => {
+    return type === 'OTHER' ? 'SYSTEM' : type;
+  };
+
+  const filteredOutput = mavrosOutput.filter(message => {
+    const matchesSearch = searchTerm === '' || 
+      message.toLowerCase().includes(searchTerm.toLowerCase());
+    const type = getMessageType(message);
+    return matchesSearch && activeFilters[type];
+  });
+
+  const clearOutput = () => {
+    setMavrosOutput([]);
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto bg-slate-900/50 text-white rounded-lg shadow-lg border border-gray-800 backdrop-blur-sm shadow-slate-900/50">
@@ -55,25 +92,75 @@ const DroneHealth = () => {
       <div className="p-6 border-b border-gray-800">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <h2 className="text-xl tracking-wider font-light">MAVROS HEALTH</h2>
+            <div className={`w-2 h-2 rounded-full ${isPaused ? 'bg-purple-500' : 'bg-green-500 animate-pulse'}`}></div>
+            <h2 className="text-xl tracking-wider font-light">MAVROS MONITOR</h2>
           </div>
-          <span className="text-xs px-3 py-1 bg-green-500/20 text-green-300 rounded-md border border-green-500/30 tracking-wider">
-            LIVE OUTPUT
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-3 py-1 ${isPaused ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-green-500/20 text-green-300 border-green-500/30'} rounded-md border tracking-wider`}>
+              {isPaused ? 'PAUSED' : 'LIVE OUTPUT'}
+            </span>
+          </div>
         </div>
       </div>
 
+      {/* Control Bar */}
+      <div className="px-6 pt-6 flex items-center gap-4">
+        {/* Search Bar */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Search messages..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-950 border border-gray-800 rounded-lg pl-10 pr-4 py-2 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+          />
+        </div>
+
+        {/* Filter Toggles */}
+        <div className="flex gap-2">
+          {Object.entries(activeFilters).map(([type, isActive]) => (
+            <button
+              key={type}
+              onClick={() => setActiveFilters(prev => ({ ...prev, [type]: !prev[type] }))}
+              className={`px-3 py-1 rounded text-xs font-medium tracking-wider transition-all border ${
+                getFilterStyle(type, isActive)
+              }`}
+            >
+              {getFilterLabel(type)}
+            </button>
+          ))}
+        </div>
+
+        {/* Control Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsPaused(!isPaused)}
+            className={`p-2 rounded-lg transition-all ${
+              isPaused
+                ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30 border border-green-500/30'
+                : 'bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30'
+            }`}
+          >
+            {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={clearOutput}
+            className="p-2 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/30 transition-all"
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Terminal Output */}
       <div className="p-6">
-        {/* Terminal Output - Enhanced with better scrollbar and background */}
         <div
           ref={outputRef}
-          className="bg-slate-950 rounded-lg p-6 h-64 w-full overflow-x-auto overflow-y-auto font-mono text-sm whitespace-pre border border-gray-800"
+          className="bg-slate-950 rounded-lg p-6 h-96 w-full overflow-x-auto overflow-y-auto font-mono text-sm whitespace-pre border border-gray-800 relative"
           style={{
-            maxWidth: '100vw',
             scrollbarWidth: 'thin',
-            scrollbarColor: '#4B5563 #1F2937',
-            overflowY: 'auto'
+            scrollbarColor: '#4B5563 #1F2937'
           }}
         >
           <style jsx>{`
@@ -94,26 +181,33 @@ const DroneHealth = () => {
               background: #334155;
             }
           `}</style>
-          {mavrosOutput.length === 0 ? (
+          {filteredOutput.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-500 tracking-wider font-light">
-                AWAITING MAVROS DATA...
+                {mavrosOutput.length === 0 ? 'AWAITING MAVROS DATA...' : 'NO MATCHING MESSAGES'}
               </p>
             </div>
           ) : (
-            mavrosOutput.map((line, index) => (
-              <div key={index} className="text-gray-300 min-w-max font-light tracking-wide">
-                <span className="text-blue-400 mr-2">→</span>
-                {line}
-              </div>
-            ))
+            filteredOutput.map((line, index) => {
+              const type = getMessageType(line);
+              return (
+                <div 
+                  key={index} 
+                  className={`min-w-max font-light tracking-wide py-0.5 hover:bg-slate-900/50 transition-colors ${getMessageColor(type)}`}
+                >
+                  <span className="mr-2">→</span>
+                  {line}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
 
       {/* Status Footer */}
-      <div className="px-6 pb-4 text-xs text-gray-400 tracking-wider">
-        <p>MAVROS Output Monitor • {mavrosOutput.length} messages received</p>
+      <div className="px-6 pb-4 flex justify-between items-center text-xs text-gray-400 tracking-wider">
+        <p>MAVROS Output Monitor • {filteredOutput.length} / {mavrosOutput.length} messages</p>
+        <p>Buffer limit: 1000 lines</p>
       </div>
     </div>
   );
