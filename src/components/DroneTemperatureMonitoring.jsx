@@ -31,7 +31,7 @@ const DroneTemperatureMonitoring = () => {
     { id: 5, name: 'Rear Left ESC', temp: 0, currentDraw: 0, minTemp: Infinity, maxTemp: -Infinity },
     { id: 6, name: 'Rear Right ESC', temp: 0, currentDraw: 0, minTemp: Infinity, maxTemp: -Infinity }
   ]);
-  
+
   const [windowSize, setWindowSize] = useState(() => {
     const saved = localStorage.getItem('tempGraphWindowSize');
     return saved ? parseInt(saved) : 30;
@@ -64,7 +64,7 @@ const DroneTemperatureMonitoring = () => {
         [esc.name]: esc.temp
       }), {})
     };
-    
+
     setTelemetryHistory(prev => {
       const newHistory = [...prev, newPoint];
       return newHistory.slice(-windowSize);
@@ -73,26 +73,38 @@ const DroneTemperatureMonitoring = () => {
 
   // Handle incoming socket data with min/max tracking
   useEffect(() => {
+    socketManager.connect();
+
     const handleTelemetry = (data) => {
-      if (data.escTemperatures) {
-        setTemperatures(prev => prev.map(esc => {
-          const newData = data.escTemperatures[esc.id - 1] || {};
-          const newTemp = newData.temp || 0;
+      if (data?.teensy) {
+        // Update temperatures and current draw
+        const temps = data.teensy.temperatures || [];
+        const currents = data.teensy.current_draw || [];
+
+        setTemperatures(prev => prev.map((esc, index) => {
+          const newTemp = temps[index] || 0;
+          const newCurrentDraw = currents[index] || 0;
           return {
             ...esc,
             temp: newTemp,
-            currentDraw: newData.currentDraw || 0,
-            minTemp: Math.min(esc.minTemp, newTemp),
-            maxTemp: Math.max(esc.maxTemp, newTemp)
+            currentDraw: newCurrentDraw,
+            minTemp: Math.min(esc.minTemp === Infinity ? newTemp : esc.minTemp, newTemp ),
+            maxTemp: Math.max(esc.maxTemp === -Infinity ? newTemp : esc.maxTemp, newTemp )
           };
         }));
-        updateTelemetry(data.escTemperatures);
+        updateTelemetry(
+          temperatures.map((esc, index) => ({
+            name: esc.name,
+            temp: data?.teensy?.temperatures?.[index] || 0
+          }))
+        );
       }
     };
 
     socketManager.subscribe('telemetry', handleTelemetry);
     return () => socketManager.unsubscribe('telemetry', handleTelemetry);
-  }, [updateTelemetry]);
+  }, [updateTelemetry, temperatures]); // Removed direct dependency on `temperatures` from useCallback and added to useEffect
+
 
   const clearHistory = () => {
     setTelemetryHistory([]);
@@ -205,14 +217,14 @@ const DroneTemperatureMonitoring = () => {
                   {esc.temp.toFixed(1)}°C
                 </div>
                 <div className="text-xs text-slate-400 tracking-wider mt-1">
-                  Min: {esc.minTemp === Infinity ? '0.00' : esc.minTemp.toFixed(2)}°C | 
+                  Min: {esc.minTemp === Infinity ? '0.00' : esc.minTemp.toFixed(2)}°C |
                   Max: {esc.maxTemp === -Infinity ? '0.00' : esc.maxTemp.toFixed(2)}°C
                 </div>
               </div>
             </div>
-            
+
             <div className="w-full bg-slate-900/50 rounded-full h-4 overflow-hidden mb-3 border border-gray-800">
-              <div 
+              <div
                 className={`h-full ${getTemperatureColor(esc.temp)} transition-all duration-500`}
                 style={{ width: `${(esc.temp / 120) * 100}%` }}
               />
@@ -235,12 +247,12 @@ const DroneTemperatureMonitoring = () => {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={displayData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="time" 
+              <XAxis
+                dataKey="time"
                 stroke="#9CA3AF"
                 tick={{ fill: '#9CA3AF' }}
               />
-              <YAxis 
+              <YAxis
                 stroke="#9CA3AF"
                 tick={{ fill: '#9CA3AF' }}
                 domain={[0, 120]}
@@ -249,14 +261,14 @@ const DroneTemperatureMonitoring = () => {
               />
               <Tooltip content={<CustomTooltip />} />
               {temperatures.map((esc) => (
-                <Line 
+                <Line
                   key={esc.id}
                   type="monotone"
                   name={esc.name}
                   dataKey={esc.name}
                   stroke={
                     esc.temp >= 80 ? '#F87171' :
-                    esc.temp >= 60 ? '#FBBF24' : 
+                    esc.temp >= 60 ? '#FBBF24' :
                     '#34D399'
                   }
                   strokeWidth={2}

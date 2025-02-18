@@ -4,20 +4,20 @@ const VIDEO_WS_URL = 'ws://172.29.172.210:5001/video';
 
 class SocketManager {
     constructor() {
-        // Existing control socket properties
+        // Control socket properties
         this.socket = null;
         this.connected = false;
         this.listeners = new Map();
         this.reconnectTimer = null;
 
-        // Add video socket properties
+        // Video socket properties
         this.videoSocket = null;
         this.videoConnected = false;
-        this.videoListeners = new Map(); // Separate listeners for video events
+        this.videoListeners = new Map();
         this.videoReconnectTimer = null;
     }
 
-    // Existing control socket methods remain the same
+    // Control socket methods
     connect() {
         if (this.socket) return;
 
@@ -109,36 +109,13 @@ class SocketManager {
         }
     }
 
-    subscribe(event, callback) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, new Set());
-        }
-        this.listeners.get(event).add(callback);
-    }
-
-    unsubscribe(event, callback) {
-        if (this.listeners.has(event)) {
-            this.listeners.get(event).delete(callback);
-        }
-    }
-
-    notifyListeners(event, data) {
-        if (this.listeners.has(event)) {
-            this.listeners.get(event).forEach(callback => callback(data));
-        }
-    }
-
-    isConnected() {
-        return this.socket && this.socket.readyState === WebSocket.OPEN;
-    }
-
-    // Add video socket methods
+    // Video socket methods
     connectVideo() {
         if (this.videoSocket) return;
 
         try {
             console.log('Connecting to Video WebSocket...');
-            this.videoSocket = new WebSocket(`ws://172.29.172.210:5001/video`);
+            this.videoSocket = new WebSocket(VIDEO_WS_URL);
 
             this.videoSocket.onopen = () => {
                 console.log('Video WebSocket Connected');
@@ -153,24 +130,42 @@ class SocketManager {
             this.videoSocket.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data);
-                    console.log('Received video message type:', message.type); // Debug log
+                    
                     if (message.type === 'video_frame') {
-                        this.notifyVideoListeners(message.type, message.data);
+                        // Debug the incoming video frame
+                        console.log('Received video frame:', {
+                            type: message.type,
+                            camera: message.camera,
+                            hasData: !!message.data,
+                            timestamp: message.timestamp,
+                            fps: message.fps
+                        });
+                        
+                        // Pass the complete message to listeners
+                        this.notifyVideoListeners(message.type, message);
+                    } else if (message.type === 'camera_stats') {
+                        // Handle camera statistics
+                        this.notifyVideoListeners('camera_stats', message.data);
                     }
                 } catch (error) {
                     console.error('Video message parsing error:', error);
+                    console.error('Raw message:', event.data);
                 }
             };
 
             this.videoSocket.onerror = (error) => {
                 console.error('Video WebSocket Error:', error);
+                this.notifyVideoListeners('error', { error: error.message });
             };
 
             this.videoSocket.onclose = () => {
                 console.log('Video WebSocket Disconnected');
                 this.videoConnected = false;
+                this.videoSocket = null;
+                this.notifyVideoListeners('connection', { status: 'disconnected' });
                 this.startVideoReconnection();
             };
+
         } catch (error) {
             console.error('Video connection error:', error);
             this.startVideoReconnection();
@@ -198,11 +193,26 @@ class SocketManager {
         this.videoConnected = false;
     }
 
+    // Listener management
+    subscribe(event, callback) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, new Set());
+        }
+        this.listeners.get(event).add(callback);
+    }
+
+    unsubscribe(event, callback) {
+        if (this.listeners.has(event)) {
+            this.listeners.get(event).delete(callback);
+        }
+    }
+
     subscribeVideo(event, callback) {
         if (!this.videoListeners.has(event)) {
             this.videoListeners.set(event, new Set());
         }
         this.videoListeners.get(event).add(callback);
+        console.log(`Subscribed to ${event}, total listeners: ${this.videoListeners.get(event).size}`);
     }
 
     unsubscribeVideo(event, callback) {
@@ -211,10 +221,35 @@ class SocketManager {
         }
     }
 
+    // Notification methods
+    notifyListeners(event, data) {
+        if (this.listeners.has(event)) {
+            this.listeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in listener for event ${event}:`, error);
+                }
+            });
+        }
+    }
+
     notifyVideoListeners(event, data) {
         if (this.videoListeners.has(event)) {
-            this.videoListeners.get(event).forEach(callback => callback(data));
+            console.log(`Notifying ${this.videoListeners.get(event).size} listeners for video event: ${event}`);
+            this.videoListeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in video listener for event ${event}:`, error);
+                }
+            });
         }
+    }
+
+    // Connection status
+    isConnected() {
+        return this.socket && this.socket.readyState === WebSocket.OPEN;
     }
 
     isVideoConnected() {

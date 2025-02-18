@@ -15,12 +15,17 @@ import DronePayload from './components/DronePayload';
 import AuthPage from './components/AuthPage';
 import SpaceHeader from './components/SpaceHeader';
 import ComponentWrapper from './components/ComponentWrapper';
+import SystemStatusMonitor from './components/SystemStatusMonitor';
 
 const MainContent = () => {
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="max-w-full px-2">
+        {/* Header Section */}
         <SpaceHeader />
+        
+        {/* Floating Status Monitor */}
+        <SystemStatusMonitor />
         
         {/* Main content area with map and video feed */}
         <div className="flex min-h-[500px] gap-4">
@@ -99,7 +104,7 @@ const MainContent = () => {
         <div className="p-4">
           <ComponentWrapper>
             <DroneTemperatureMonitoring />
-          </ComponentWrapper>
+            </ComponentWrapper>
         </div>
       </div>
     </div>
@@ -108,12 +113,16 @@ const MainContent = () => {
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Create the main content once
   const mainContent = <MainContent />;
 
+  // Show auth page if not authenticated
   if (!isAuthenticated) {
     return <AuthPage onAuthenticated={setIsAuthenticated}>{mainContent}</AuthPage>;
   }
 
+  // Show main content if authenticated
   return mainContent;
 };
 

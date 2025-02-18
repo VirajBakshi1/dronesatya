@@ -6,46 +6,84 @@ const DronePayload = () => {
   const [bayStatus, setBayStatus] = useState('UNKNOWN');
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [lastCommand, setLastCommand] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const handleBayConnection = (data) => {
-      setIsConnected(data.connected);
+    socketManager.connect();
+
+    const handleTelemetry = (data) => {
+      if (data?.teensy) {
+        setIsConnected(data.teensy.connected);
+      }
     };
 
-    socketManager.subscribe('bay_connection', handleBayConnection);
-    
+    const handleLatchStatus = (data) => {
+      if (data?.status) {
+        const status = data.status;
+        setBayStatus(status);
+
+        // Clear loading state when operation completes
+        if (status === 'OPENED' || status === 'CLOSED') {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    socketManager.subscribe('telemetry', handleTelemetry);
+    socketManager.subscribe('latch_status', handleLatchStatus);
+
     return () => {
-      socketManager.unsubscribe('bay_connection', handleBayConnection);
+      socketManager.unsubscribe('telemetry', handleTelemetry);
+      socketManager.unsubscribe('latch_status', handleLatchStatus);
     };
   }, []);
 
   const handleBayDoor = async (command) => {
     if (!isConnected) return;
-    
+
+    setError(null);
     setIsLoading(true);
+
     try {
-      await socketManager.emit('payload_command', { command: command });
-      setLastCommand(command);
-      setBayStatus('COMMAND_SENT');
+      const success = await socketManager.sendCommand('payload_command', {
+        command: command
+      });
+
+      if (!success) {
+        throw new Error('Failed to send command: Not connected');
+      }
+
+      // Update status immediately to show operation starting
+      setBayStatus(command === 'OPEN' ? 'MOVING_OPEN' : 'MOVING_CLOSE');
+
     } catch (error) {
       console.error('Failed to send command:', error);
-    } finally {
+      setError(`Failed to send command: ${error.message}`);
       setIsLoading(false);
     }
   };
 
-  const checkBayStatus = async () => {
-    if (!isConnected) return;
-    
-    setIsLoading(true);
-    try {
-      await socketManager.emit('payload_status_request');
-      setBayStatus('CHECKING');
-    } catch (error) {
-      console.error('Failed to request status:', error);
-    } finally {
-      setIsLoading(false);
+  // Status text formatting
+  const getStatusDisplay = (status) => {
+    switch (status) {
+      case 'MOVING_OPEN': return 'Opening Bay...';
+      case 'MOVING_CLOSE': return 'Closing Bay...';
+      case 'OPENED': return 'Bay Open';
+      case 'CLOSED': return 'Bay Closed';
+      default: return 'Bay Status Unknown';
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'MOVING_OPEN':
+      case 'MOVING_CLOSE':
+        return 'text-yellow-400';
+      case 'OPENED':
+      case 'CLOSED':
+        return 'text-green-400';
+      default:
+        return 'text-gray-400';
     }
   };
 
@@ -85,23 +123,10 @@ const DronePayload = () => {
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-sm text-gray-300 tracking-wider font-light">CURRENT STATUS</h2>
-                <p className="mt-2 text-sm text-gray-400">
-                  Last Command: {lastCommand || 'No commands sent'}
-                </p>
-                <p className="mt-1 text-sm text-gray-400">
-                  Status: {bayStatus}
+                <p className={`mt-2 tracking-wider font-light ${getStatusColor(bayStatus)}`}>
+                  {getStatusDisplay(bayStatus)}
                 </p>
               </div>
-              <button
-                onClick={checkBayStatus}
-                disabled={!isConnected || isLoading}
-                className="px-4 py-2 bg-blue-500/20 border border-blue-500/30 rounded 
-                          text-xs tracking-wider font-light text-blue-400
-                          hover:bg-blue-500/30 disabled:opacity-50 
-                          disabled:cursor-not-allowed transition-colors"
-              >
-                CHECK STATUS
-              </button>
             </div>
           </div>
 
@@ -113,42 +138,25 @@ const DronePayload = () => {
                 onClick={() => handleBayDoor('OPEN')}
                 disabled={!isConnected || isLoading}
                 className="flex-1 py-3 px-6 rounded-lg font-light tracking-wider text-sm
-                          bg-slate-700/50 text-white border border-slate-600 
-                          hover:bg-slate-700 disabled:opacity-50 
+                          bg-slate-700/50 text-white border border-slate-600
+                          hover:bg-slate-700 disabled:opacity-50
                           disabled:cursor-not-allowed transition-colors"
               >
                 OPEN BAY
               </button>
-              
+
               <button
-                onClick={() => handleBayDoor('CLOSED')}
+                onClick={() => handleBayDoor('CLOSE')}
                 disabled={!isConnected || isLoading}
                 className="flex-1 py-3 px-6 rounded-lg font-light tracking-wider text-sm
-                          bg-slate-700/50 text-white border border-slate-600 
-                          hover:bg-slate-700 disabled:opacity-50 
+                          bg-slate-700/50 text-white border border-slate-600
+                          hover:bg-slate-700 disabled:opacity-50
                           disabled:cursor-not-allowed transition-colors"
               >
                 CLOSE BAY
               </button>
             </div>
           </div>
-        </div>
-
-        {/* Debug Information */}
-        <div className="border-t border-gray-800 p-6">
-          <details className="text-sm">
-            <summary className="cursor-pointer text-gray-400 hover:text-gray-300 tracking-wider font-light">
-              DEBUG INFORMATION
-            </summary>
-            <pre className="mt-4 p-4 bg-slate-950 rounded-lg border border-gray-800 text-xs overflow-auto text-gray-300 font-mono">
-              {JSON.stringify({ 
-                bayStatus, 
-                isLoading, 
-                isConnected, 
-                lastCommand 
-              }, null, 2)}
-            </pre>
-          </details>
         </div>
       </div>
     </div>
