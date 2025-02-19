@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Radio, SignalHigh, Gauge } from 'lucide-react';
+import { Radio, SignalHigh, Video, Gauge } from 'lucide-react';
 import socketManager from '../utils/socketManager';
 
 // Update these constants at the top of your component
@@ -7,7 +7,6 @@ const SNAP_THRESHOLD = 200;  // Increased from 150 to 200 for stronger snap
 const EDGE_PADDING = 16;
 
 const SystemStatusMonitor = () => {
-  // Add these state variables at the top of your component
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -15,7 +14,6 @@ const SystemStatusMonitor = () => {
     backendConnected: false,
     mavrosConnected: false,
     teensyConnected: false,
-    controlLatency: 0,
     videoLatency: 0,
     networkLatency: 0,
     payloadStatus: 'UNKNOWN',
@@ -29,7 +27,6 @@ const SystemStatusMonitor = () => {
 
   // State for dragging
   const [position, setPosition] = useState(() => {
-    // Try to get saved position from localStorage
     const saved = localStorage.getItem('monitorPosition');
     return saved ? JSON.parse(saved) : { x: EDGE_PADDING, y: EDGE_PADDING };
   });
@@ -37,13 +34,11 @@ const SystemStatusMonitor = () => {
 
   // Refs
   const latencyBuffers = useRef({
-    control: [],
     video: [],
     network: []
   });
   const pingTimestamp = useRef(null);
   const pingInterval = useRef(null);
-  // Modify the bandwidth ref to track video separately
   const bandwidthRef = useRef({
     bytesReceived: 0,
     videoBytesReceived: 0,
@@ -52,11 +47,8 @@ const SystemStatusMonitor = () => {
   });
   const dragRef = useRef(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
-
-  // Add this for hover delay management
   const hoverTimeout = useRef(null);
 
-  // Add these CSS keyframes at the top of your component
   const pulseAnimation = `
     @keyframes floatPulse {
       0% { transform: translate(0, 0); }
@@ -65,16 +57,14 @@ const SystemStatusMonitor = () => {
     }
   `;
 
-  // Replace your existing snapToCorner function with this enhanced version
+  // Your existing snapToCorner function remains exactly the same
   const snapToCorner = (x, y, width, height) => {
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
 
-    // Define quarter sections with smooth transition zones
-    const quarterWidth = windowWidth / 3;  // Increased from /4 for smoother zones
+    const quarterWidth = windowWidth / 3;
     const quarterHeight = windowHeight / 3;
 
-    // Calculate distance from each corner with smoothing
     const calculateCornerPull = (corner) => {
       let cornerX, cornerY;
       switch(corner) {
@@ -108,19 +98,16 @@ const SystemStatusMonitor = () => {
       };
     };
 
-    // Check pulls from all corners
     const corners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
     const pulls = corners.map(corner => ({
       corner,
       ...calculateCornerPull(corner)
     }));
 
-    // Find strongest pull
     const strongestPull = pulls.reduce((a, b) =>
       a.pull > b.pull ? a : b
     );
 
-    // If there's a significant pull, smoothly transition
     if (strongestPull.pull > 0.1) {
       const newX = x + (strongestPull.x - x) * strongestPull.pull;
       const newY = y + (strongestPull.y - y) * strongestPull.pull;
@@ -134,7 +121,6 @@ const SystemStatusMonitor = () => {
       return pos;
     }
 
-    // If not in snap range, keep within bounds
     const boundedPos = {
       x: Math.max(EDGE_PADDING, Math.min(windowWidth - width - EDGE_PADDING, x)),
       y: Math.max(EDGE_PADDING, Math.min(windowHeight - height - EDGE_PADDING, y))
@@ -144,7 +130,7 @@ const SystemStatusMonitor = () => {
     return boundedPos;
   };
 
-  // Add these handlers
+  // Mouse event handlers
   const handleMouseEnter = () => {
     if (hoverTimeout.current) {
       clearTimeout(hoverTimeout.current);
@@ -153,7 +139,7 @@ const SystemStatusMonitor = () => {
       if (!isExpanded) {
         setIsHovered(true);
       }
-    }, 300); // 300ms delay before expanding on hover
+    }, 300);
   };
 
   const handleMouseLeave = () => {
@@ -174,7 +160,7 @@ const SystemStatusMonitor = () => {
       x: e.clientX - position.x,
       y: e.clientY - position.y
     };
-    e.preventDefault(); // Prevent text selection
+    e.preventDefault();
   };
 
   const handleMouseMove = (e) => {
@@ -192,39 +178,12 @@ const SystemStatusMonitor = () => {
     if (!isDragging) return;
     setIsDragging(false);
 
-    // Final snap check
     const rect = dragRef.current.getBoundingClientRect();
     const newPos = snapToCorner(position.x, position.y, rect.width, rect.height);
     setPosition(newPos);
   };
 
-  // Window resize handler
-  useEffect(() => {
-    const handleResize = () => {
-      if (dragRef.current) {
-        const rect = dragRef.current.getBoundingClientRect();
-        const newPos = snapToCorner(position.x, position.y, rect.width, rect.height);
-        setPosition(newPos);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [position]);
-
-  // Mouse event handlers
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, position]);
-
-  // Update trackDataSize to handle video frames separately
+  // Data tracking functions
   const trackDataSize = (data, isVideo = false) => {
     const size = new TextEncoder().encode(JSON.stringify(data)).length;
     if (isVideo) {
@@ -234,45 +193,6 @@ const SystemStatusMonitor = () => {
     }
   };
 
-  // Your existing status monitoring code
-  useEffect(() => {
-    // Update bandwidth calculation
-    const calculateBandwidth = () => {
-      const now = Date.now();
-      const elapsed = (now - bandwidthRef.current.lastCheck) / 1000;
-
-      // Calculate control bandwidth (non-video)
-      const controlBytesPerSec = bandwidthRef.current.bytesReceived / elapsed;
-      const controlKbPerSec = controlBytesPerSec / 1024;
-
-      // Calculate video bandwidth
-      const videoBytesPerSec = bandwidthRef.current.videoBytesReceived / elapsed;
-      const videoKbPerSec = videoBytesPerSec / 1024;
-
-      // Total bandwidth
-      const totalKbPerSec = controlKbPerSec + videoKbPerSec;
-
-      setStats(prev => ({
-        ...prev,
-        bandwidth: {
-          control: Math.round(controlKbPerSec * 10) / 10,
-          video: Math.round(videoKbPerSec * 10) / 10,
-          total: Math.round(totalKbPerSec * 10) / 10,
-          peak: Math.max(prev.bandwidth.peak, totalKbPerSec)
-        }
-      }));
-
-      // Reset counters
-      bandwidthRef.current.bytesReceived = 0;
-      bandwidthRef.current.videoBytesReceived = 0;
-      bandwidthRef.current.lastCheck = now;
-    };
-
-    bandwidthRef.current.interval = setInterval(calculateBandwidth, 1000);
-    return () => clearInterval(bandwidthRef.current.interval);
-  }, []);
-
-  // Your existing update functions
   const updateLatency = (type, value) => {
     if (typeof value !== 'number' || isNaN(value)) return;
 
@@ -289,9 +209,64 @@ const SystemStatusMonitor = () => {
     }));
   };
 
-  // WebSocket handlers effect
+  // Effects
   useEffect(() => {
+    const handleResize = () => {
+      if (dragRef.current) {
+        const rect = dragRef.current.getBoundingClientRect();
+        const newPos = snapToCorner(position.x, position.y, rect.width, rect.height);
+        setPosition(newPos);
+      }
+    };
 
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [position]);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, position]);
+
+  useEffect(() => {
+    const calculateBandwidth = () => {
+      const now = Date.now();
+      const elapsed = (now - bandwidthRef.current.lastCheck) / 1000;
+
+      const controlBytesPerSec = bandwidthRef.current.bytesReceived / elapsed;
+      const controlKbPerSec = controlBytesPerSec / 1024;
+
+      const videoBytesPerSec = bandwidthRef.current.videoBytesReceived / elapsed;
+      const videoKbPerSec = videoBytesPerSec / 1024;
+
+      const totalKbPerSec = controlKbPerSec + videoKbPerSec;
+
+      setStats(prev => ({
+        ...prev,
+        bandwidth: {
+          control: Math.round(controlKbPerSec * 10) / 10,
+          video: Math.round(videoKbPerSec * 10) / 10,
+          total: Math.round(totalKbPerSec * 10) / 10,
+          peak: Math.max(prev.bandwidth.peak, totalKbPerSec)
+        }
+      }));
+
+      bandwidthRef.current.bytesReceived = 0;
+      bandwidthRef.current.videoBytesReceived = 0;
+      bandwidthRef.current.lastCheck = now;
+    };
+
+    bandwidthRef.current.interval = setInterval(calculateBandwidth, 1000);
+    return () => clearInterval(bandwidthRef.current.interval);
+  }, []);
+
+  useEffect(() => {
     const handleConnection = (data) => {
       const isConnected = data.status === 'connected';
       setStats(prev => ({
@@ -305,23 +280,16 @@ const SystemStatusMonitor = () => {
       if (!data) return;
       trackDataSize(data);
 
-      const teensyConnected = data.teensy?.connected || false;
-      const teensyLatency = data.teensy?.latency || 0;
-
-      if (teensyLatency > 0) {
-        updateLatency('control', teensyLatency);
-      }
-
       setStats(prev => ({
         ...prev,
         mavrosConnected: data.connected || false,
-        teensyConnected: teensyConnected,
+        teensyConnected: data.teensy?.connected || false,
       }));
     };
 
     const handleVideoFrame = (data) => {
       if (!data?.timestamp) return;
-      trackDataSize(data, true);  // Mark as video data
+      trackDataSize(data, true);
 
       const now = Date.now() / 1000;
       const serverTimestamp = data.timestamp;
@@ -383,7 +351,6 @@ const SystemStatusMonitor = () => {
     };
   }, []);
 
-  // Update your cleanup in useEffect to include the hover timeout
   useEffect(() => {
     return () => {
       if (hoverTimeout.current) {
@@ -399,7 +366,6 @@ const SystemStatusMonitor = () => {
     return 'text-red-400';
   };
 
-  // Modify your main return JSX
   return (
     <div
       ref={dragRef}
@@ -420,7 +386,6 @@ const SystemStatusMonitor = () => {
       onClick={handleClick}
       className="select-none"
     >
-      {/* Add this style tag to your component */}
       <style>{pulseAnimation}</style>
       <div
         className={`
@@ -448,126 +413,118 @@ const SystemStatusMonitor = () => {
               <div className={`w-1.5 h-1.5 rounded-full ${stats.backendConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
               <div className={`w-1.5 h-1.5 rounded-full ${stats.mavrosConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
               <div className={`w-1.5 h-1.5 rounded-full ${stats.teensyConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-            </div>
-            <span className={`text-xs font-mono ${getLatencyColor(stats.networkLatency)}`}>
-              {stats.networkLatency}ms
-            </span>
-          </div>
-        </div>
-
-        {/* Expanded View */}
-        <div
-          className={`
-            transition-all duration-500 ease-in-out transform
-            ${(isExpanded || isHovered)
-              ? 'scale-100 opacity-100'
-              : 'scale-95 opacity-0 absolute'
-            }
-          `}
-        >
-          <div className="space-y-1.5 min-w-[180px]">
-            {/* Connection Status Section */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Radio className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-xs tracking-wider text-gray-400 font-light">CONN:</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${stats.backendConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">GPU</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${stats.mavrosConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">FCU</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${stats.teensyConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">BAY</span>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-gray-800" />
-
-            {/* Latencies Section */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs tracking-wider text-gray-400 font-light">SYS:</span>
-                </div>
-                <span className={`text-xs font-mono ${getLatencyColor(stats.controlLatency)}`}>
-                  {stats.controlLatency}ms
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <SignalHigh className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs tracking-wider text-gray-400 font-light">NET:</span>
-                </div>
-                <span className={`text-xs font-mono ${getLatencyColor(stats.networkLatency)}`}>
-                  {stats.networkLatency}ms
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <SignalHigh className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs tracking-wider text-gray-400 font-light">VIDEO:</span>
-                </div>
-                <span className={`text-xs font-mono ${getLatencyColor(stats.videoLatency)}`}>
-                  {stats.videoLatency}ms
-                </span>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-gray-800" />
-
-            {/* Payload Status */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs tracking-wider text-gray-400 font-light">BAY:</span>
-              <span className="text-[10px] font-mono tracking-wider text-blue-400 uppercase">
-                {stats.payloadStatus}
+              <span className={`text-xs font-mono ${getLatencyColor(stats.networkLatency)}`}>
+                {stats.networkLatency}ms
               </span>
             </div>
-
-            {/* Divider */}
-            <div className="border-t border-gray-800" />
-
-            {/* Bandwidth Section */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Gauge className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-xs tracking-wider text-gray-400 font-light">BW:</span>
+          </div>
+  
+          {/* Expanded View */}
+          <div
+            className={`
+              transition-all duration-500 ease-in-out transform
+              ${(isExpanded || isHovered)
+                ? 'scale-100 opacity-100'
+                : 'scale-95 opacity-0 absolute'
+              }
+            `}
+          >
+            <div className="space-y-1.5 min-w-[180px]">
+              {/* Connection Status Section */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs tracking-wider text-gray-400 font-light">CONN:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${stats.backendConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">GPU</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${stats.mavrosConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">FCU</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${stats.teensyConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-light">BAY</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col items-end">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] tracking-wider text-gray-500 font-light">CTL:</span>
-                  <span className="text-[10px] font-mono tracking-wider text-blue-400">
-                    {stats.bandwidth.control} KB/s
+  
+              {/* Divider */}
+              <div className="border-t border-gray-800" />
+  
+              {/* Latencies Section */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <SignalHigh className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs tracking-wider text-gray-400 font-light">NET:</span>
+                  </div>
+                  <span className={`text-xs font-mono ${getLatencyColor(stats.networkLatency)}`}>
+                    {stats.networkLatency}ms
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] tracking-wider text-gray-500 font-light">VID:</span>
-                  <span className="text-[10px] font-mono tracking-wider text-blue-400">
-                    {stats.bandwidth.video} KB/s
+  
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-3.5 h-3.5 text-blue-400" />
+                    <span className="text-xs tracking-wider text-gray-400 font-light">VIDEO:</span>
+                  </div>
+                  <span className={`text-xs font-mono ${getLatencyColor(stats.videoLatency)}`}>
+                    {stats.videoLatency}ms
                   </span>
                 </div>
+              </div>
+  
+              {/* Divider */}
+              <div className="border-t border-gray-800" />
+  
+              {/* Payload Status */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs tracking-wider text-gray-400 font-light">BAY:</span>
+                <span className="text-[10px] font-mono tracking-wider text-blue-400 uppercase">
+                  {stats.payloadStatus}
+                </span>
+              </div>
+  
+              {/* Divider */}
+              <div className="border-t border-gray-800" />
+  
+              {/* Bandwidth Section */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] tracking-wider text-gray-500 font-light">PEAK:</span>
-                  <span className="text-[9px] font-mono tracking-wider text-gray-400">
-                    {Math.round(stats.bandwidth.peak)} KB/s
-                  </span>
+                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs tracking-wider text-gray-400 font-light">BW:</span>
+                </div>
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] tracking-wider text-gray-500 font-light">CTL:</span>
+                    <span className="text-[10px] font-mono tracking-wider text-blue-400">
+                      {stats.bandwidth.control} KB/s
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] tracking-wider text-gray-500 font-light">VID:</span>
+                    <span className="text-[10px] font-mono tracking-wider text-blue-400">
+                      {stats.bandwidth.video} KB/s
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] tracking-wider text-gray-500 font-light">PEAK:</span>
+                    <span className="text-[9px] font-mono tracking-wider text-gray-400">
+                      {Math.round(stats.bandwidth.peak)} KB/s
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-export default SystemStatusMonitor;
+    );
+  };
+  
+  export default SystemStatusMonitor;

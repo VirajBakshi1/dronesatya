@@ -1,3 +1,4 @@
+// components/SpaceHeader.jsx
 import React, { useState, useCallback } from 'react';
 
 const GradientText = ({ text, className }) => {
@@ -41,7 +42,7 @@ const GradientText = ({ text, className }) => {
   );
 };
 
-const SpaceHeader = () => {
+const SpaceHeader = ({ interfaceType = "CONTROL" }) => {
   return (
     <div className="relative py-12 bg-slate-950">
       <div className="flex flex-col items-center">
@@ -55,7 +56,7 @@ const SpaceHeader = () => {
              textShadow: '0 0 10px rgba(148, 163, 184, 0.2)',
              letterSpacing: '0.4em'
            }}>
-          CONTROL INTERFACE
+          {interfaceType} INTERFACE
         </p>
       </div>
     </div>
