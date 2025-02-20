@@ -12,39 +12,47 @@ const DroneVideoFeedPrecision = () => {
 
     // Video subscription effect - matching DroneVideoFeed pattern
     useEffect(() => {
-        setDebugMsg(`Camera State Change: ${isEnabled ? 'ON' : 'OFF'}`);
-        
+        console.log(`${isEnabled ? 'Enabling' : 'Disabling'} camera feed`);
+
         if (isEnabled) {
+            // Ensure video connection
             if (!socketManager.isVideoConnected()) {
                 socketManager.connectVideo();
             }
 
-            // Send enable command with debug information
-            socketManager.sendCommand('camera_control', {
-                camera: 'precision',
-                enabled: true,
-                debug: true  // Add this to track command
-            });
-
             const handleVideoFrame = (data) => {
-                if (data && data.type === 'video_frame' && 
-                    data.camera === 'precision_camera' && data.data) {
+                if (data &&
+                    data.type === 'video_frame' &&
+                    data.camera === 'precision_camera' && // use appropriate camera name
+                    data.data) {
                     setImageData(`data:image/jpeg;base64,${data.data}`);
-                    setDebugMsg(`Frame received at: ${new Date().toLocaleTimeString()}`);
                 }
             };
 
             socketManager.subscribeVideo('video_frame', handleVideoFrame);
-            setDebugMsg('Subscribed to precision camera');
+            console.log('Subscribed to video frames');
+
+            // Send camera control message
+            if (socketManager.videoSocket && socketManager.isVideoConnected()) {
+                socketManager.videoSocket.send(JSON.stringify({
+                    type: 'camera_control',
+                    camera: 'precision', // use appropriate camera type
+                    enabled: true
+                }));
+            }
 
             return () => {
+                console.log('Cleaning up video subscription');
                 socketManager.unsubscribeVideo('video_frame', handleVideoFrame);
-                socketManager.sendCommand('camera_control', {
-                    camera: 'precision',
-                    enabled: false,
-                    debug: true
-                });
-                setDebugMsg('Unsubscribed from precision camera');
+
+                // Send disable command only if we're actually disabling
+                if (!isEnabled && socketManager.isVideoConnected()) {
+                    socketManager.videoSocket.send(JSON.stringify({
+                        type: 'camera_control',
+                        camera: 'precision', // use appropriate camera type
+                        enabled: false
+                    }));
+                }
             };
         }
     }, [isEnabled]);
@@ -91,9 +99,9 @@ const DroneVideoFeedPrecision = () => {
     }, [isFullscreen]);
 
     return (
-        <div 
+        <div
             ref={videoContainerRef}
-            className={`relative w-full bg-slate-900/50 rounded-lg shadow-lg overflow-hidden border border-gray-800 
+            className={`relative w-full bg-slate-900/50 rounded-lg shadow-lg overflow-hidden border border-gray-800
                 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
         >
             <div className={`flex flex-col ${isFullscreen ? 'h-screen' : ''}`}>
@@ -101,9 +109,9 @@ const DroneVideoFeedPrecision = () => {
                 <div className="p-4 bg-slate-900/80 flex justify-between items-center border-b border-gray-800">
                     <div className="flex items-center gap-4">
                         <h2 className="text-white text-lg font-light tracking-wider">
-                            PRECISION LANDING CAMERA 
-                            {socketManager.isVideoConnected() ? 
-                                <span className="text-green-500 text-sm ml-2">●</span> : 
+                            PRECISION LANDING CAMERA
+                            {socketManager.isVideoConnected() ?
+                                <span className="text-green-500 text-sm ml-2">●</span> :
                                 <span className="text-red-500 text-sm ml-2">●</span>}
                         </h2>
                         <button
@@ -116,11 +124,11 @@ const DroneVideoFeedPrecision = () => {
                     <div className="flex items-center space-x-3">
                         <button
                             onClick={handleCameraToggle}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300
                                 ${isEnabled ? 'bg-green-500/80 border border-green-500/30' : 'bg-slate-700/80 border border-gray-700'}`}
                         >
                             <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300 
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300
                                     ${isEnabled ? 'translate-x-6' : 'translate-x-1'}`}
                             />
                         </button>

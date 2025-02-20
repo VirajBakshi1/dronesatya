@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MoreVertical } from 'lucide-react';
+
+// Drone Components
 import DroneVideoFeed from '../components/DroneVideoFeed';
 import DroneVideoFeedPrecision from '../components/DroneVideoFeedPrecision';
 import DroneMap from '../components/DroneMap';
@@ -12,10 +14,16 @@ import DroneHealth from '../components/DroneHealth';
 import DroneBattery from '../components/DroneBattery';
 import DroneTemperatureMonitoring from '../components/DroneTemperatureMonitoring';
 import DronePayload from '../components/DronePayload';
+
+// UI Components
 import SpaceHeader from '../components/SpaceHeader';
 import ComponentWrapper from '../components/ComponentWrapper';
 import SystemStatusMonitor from '../components/SystemStatusMonitor';
 
+// Utilities
+import socketManager from '../utils/socketManager';
+
+// Main ControlInterface Component
 const ControlInterface = ({ onOpenMenu }) => {
   return (
     <div className="min-h-screen bg-slate-950">

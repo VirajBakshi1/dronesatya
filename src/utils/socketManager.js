@@ -111,7 +111,14 @@ class SocketManager {
 
     // Video socket methods
     connectVideo() {
-        if (this.videoSocket) return;
+        if (this.videoSocket) {
+            // If socket exists but is in closing/closed state, remove it
+            if (this.videoSocket.readyState >= WebSocket.CLOSING) {
+                this.videoSocket = null;
+            } else {
+                return; // Socket is already connected or connecting
+            }
+        }
 
         try {
             console.log('Connecting to Video WebSocket...');
@@ -130,26 +137,14 @@ class SocketManager {
             this.videoSocket.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data);
-                    
                     if (message.type === 'video_frame') {
-                        // Debug the incoming video frame
-                        console.log('Received video frame:', {
-                            type: message.type,
-                            camera: message.camera,
-                            hasData: !!message.data,
-                            timestamp: message.timestamp,
-                            fps: message.fps
-                        });
-                        
-                        // Pass the complete message to listeners
-                        this.notifyVideoListeners(message.type, message);
+                        console.log(`Processing frame for camera: ${message.camera}, Listeners: ${this.videoListeners.get('video_frame')?.size || 0}`);
+                        this.notifyVideoListeners('video_frame', message);
                     } else if (message.type === 'camera_stats') {
-                        // Handle camera statistics
-                        this.notifyVideoListeners('camera_stats', message.data);
+                        this.notifyVideoListeners('camera_stats', message);
                     }
                 } catch (error) {
                     console.error('Video message parsing error:', error);
-                    console.error('Raw message:', event.data);
                 }
             };
 
@@ -161,7 +156,7 @@ class SocketManager {
             this.videoSocket.onclose = () => {
                 console.log('Video WebSocket Disconnected');
                 this.videoConnected = false;
-                this.videoSocket = null;
+                // Don't clear listeners on disconnect
                 this.notifyVideoListeners('connection', { status: 'disconnected' });
                 this.startVideoReconnection();
             };
@@ -213,11 +208,35 @@ class SocketManager {
         }
         this.videoListeners.get(event).add(callback);
         console.log(`Subscribed to ${event}, total listeners: ${this.videoListeners.get(event).size}`);
+
+        // If not connected, connect
+        if (!this.isVideoConnected()) {
+            this.connectVideo();
+        }
     }
 
+    // Add better error handling and logging
     unsubscribeVideo(event, callback) {
         if (this.videoListeners.has(event)) {
-            this.videoListeners.get(event).delete(callback);
+            const listeners = this.videoListeners.get(event);
+            if (listeners) {
+                const deleted = listeners.delete(callback);
+                if (deleted) {
+                    console.log(`Unsubscribed from ${event}, remaining listeners: ${listeners.size}`);
+                } else {
+                    console.warn(`Attempted to unsubscribe from ${event} but callback not found.`);
+                }
+
+                if (listeners.size === 0) {
+                    console.log(`No more listeners for ${event}, considering disconnection (implementation specific).`);
+                    // Add logic here to handle disconnect, perhaps after a timeout
+                    // For example, if it makes sense to disconnect the video stream when there are no listeners
+                }
+            } else {
+                console.warn(`Attempted to unsubscribe from ${event} but no listeners found.`);
+            }
+        } else {
+            console.warn(`Attempted to unsubscribe from ${event} which has no subscribers.`);
         }
     }
 

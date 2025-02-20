@@ -8,29 +8,48 @@ const DroneVideoFeed = () => {
     const videoContainerRef = useRef(null);
 
     useEffect(() => {
-        console.log('DroneVideoFeed mounted');
+        console.log(`${isEnabled ? 'Enabling' : 'Disabling'} camera feed`);
+
         if (isEnabled) {
-            socketManager.connectVideo();
+            // Ensure video connection
+            if (!socketManager.isVideoConnected()) {
+                socketManager.connectVideo();
+            }
 
             const handleVideoFrame = (data) => {
-                if (data && data.type === 'video_frame' && data.camera === 'web_camera' && data.data) {
+                if (data &&
+                    data.type === 'video_frame' &&
+                    data.camera === 'web_camera' && // use appropriate camera name
+                    data.data) {
                     setImageData(`data:image/jpeg;base64,${data.data}`);
                 }
             };
 
             socketManager.subscribeVideo('video_frame', handleVideoFrame);
+            console.log('Subscribed to video frames');
 
-            socketManager.subscribeVideo('connection', (status) => {
-                console.log('Video connection status:', status);
-            });
+            // Send camera control message
+            if (socketManager.videoSocket && socketManager.isVideoConnected()) {
+                socketManager.videoSocket.send(JSON.stringify({
+                    type: 'camera_control',
+                    camera: 'web', // use appropriate camera type
+                    enabled: true
+                }));
+            }
 
             return () => {
-                console.log('DroneVideoFeed unmounting');
+                console.log('Cleaning up video subscription');
                 socketManager.unsubscribeVideo('video_frame', handleVideoFrame);
-                socketManager.disconnectVideo();
+
+                // Send disable command only if we're actually disabling
+                if (!isEnabled && socketManager.isVideoConnected()) {
+                    socketManager.videoSocket.send(JSON.stringify({
+                        type: 'camera_control',
+                        camera: 'web', // use appropriate camera type
+                        enabled: false
+                    }));
+                }
             };
-        } else {
-            setImageData(null);
         }
     }, [isEnabled]);
 
@@ -69,10 +88,28 @@ const DroneVideoFeed = () => {
         };
     }, [isFullscreen]);
 
+    // Add camera control message when toggling
+    const handleCameraToggle = () => {
+        const newState = !isEnabled;
+        setIsEnabled(newState);
+
+        // Send camera control message
+        if (socketManager.videoSocket && socketManager.isVideoConnected()) { // Check if videoSocket is available and connected
+            socketManager.videoSocket.send(JSON.stringify({
+                type: 'camera_control',
+                camera: 'web',
+                enabled: newState
+            }));
+        } else {
+            console.warn("Video WebSocket not connected. Camera control command not sent.");
+        }
+    };
+
+
     return (
-        <div 
+        <div
             ref={videoContainerRef}
-            className={`relative w-full bg-slate-900/50 rounded-lg shadow-lg overflow-hidden border border-gray-800 
+            className={`relative w-full bg-slate-900/50 rounded-lg shadow-lg overflow-hidden border border-gray-800
                 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}
         >
             {/* Video container with flex layout */}
@@ -89,7 +126,7 @@ const DroneVideoFeed = () => {
                             />
                         ) : (
                             <div className="flex items-center justify-center w-full h-full bg-slate-800/80 text-gray-300 font-light tracking-wide">
-                                Waiting for video feed... 
+                                Waiting for video feed...
                                 <span className="ml-2 text-gray-400">
                                     (WebSocket {socketManager.isVideoConnected() ? 'Connected' : 'Disconnected'})
                                 </span>
@@ -115,12 +152,12 @@ const DroneVideoFeed = () => {
                     {/* Camera toggle controls */}
                     <div className="flex items-center space-x-3">
                         <button
-                            onClick={() => setIsEnabled(!isEnabled)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 
+                            onClick={handleCameraToggle}  // Replace old handler
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300
                                 ${isEnabled ? 'bg-green-500/80 border border-green-500/30' : 'bg-slate-700/80 border border-gray-700'}`}
                         >
                             <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300 
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300
                                     ${isEnabled ? 'translate-x-6' : 'translate-x-1'}`}
                             />
                         </button>

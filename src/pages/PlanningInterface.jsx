@@ -1,9 +1,9 @@
-// src/pages/PlanningInterface.jsx
 import React from 'react';
 import { MoreVertical } from 'lucide-react';
 import SpaceHeader from '../components/SpaceHeader';
 import ComponentWrapper from '../components/ComponentWrapper';
 import SystemStatusMonitor from '../components/SystemStatusMonitor';
+import MissionPlanningMap from '../components/MissionPlanningMap';
 
 const PlanningInterface = ({ onOpenMenu }) => {
   return (
@@ -18,7 +18,11 @@ const PlanningInterface = ({ onOpenMenu }) => {
       <div className="max-w-full px-2">
         <SpaceHeader interfaceType="PLANNING" />
         <SystemStatusMonitor />
-        {/* Your planning interface content */}
+        <div className="mt-4">
+          <ComponentWrapper>
+            <MissionPlanningMap />
+          </ComponentWrapper>
+        </div>
       </div>
     </div>
   );
