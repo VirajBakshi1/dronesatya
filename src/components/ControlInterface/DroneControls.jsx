@@ -9,10 +9,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "./ui/alert-dialog";
+} from "../ui/alert-dialog";
 
 // Replace with your Jetson's IP address
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 
 const DroneControls = () => {
   const [pressedKeys, setPressedKeys] = useState([]);

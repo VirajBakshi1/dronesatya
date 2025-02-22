@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 import { Search, Pause, Play, XCircle } from 'lucide-react';
 
 const DroneHealth = () => {

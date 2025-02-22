@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, Clock, ChevronDown, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import socketManager from "../utils/socketManager";
+import socketManager from "../../utils/socketManager";
 
 const CustomAlert = ({ type, title, description }) => {
   const bgColor = type === 'warning' ? 'bg-yellow-900/50 border-yellow-400/30' : 'bg-red-900/50 border-red-400/30';

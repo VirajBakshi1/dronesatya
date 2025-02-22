@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 
 const DroneVideoFeed = () => {
     const [imageData, setImageData] = useState(null);

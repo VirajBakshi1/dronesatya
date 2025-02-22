@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Battery, Zap, AlertTriangle, ChevronDown, ChevronUp, Trash2, Clock } from 'lucide-react';
-import socketManager from '../utils/socketManager';
+import { Battery, Zap, AlertTriangle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import socketManager from '../../utils/socketManager';
 
 const DroneBattery = () => {
   // Core state
@@ -14,23 +14,29 @@ const DroneBattery = () => {
     const saved = localStorage.getItem('graphWindowSize');
     return saved ? parseInt(saved) : 30;
   });
-  
+  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState(null);
+  const [currentDomain, setCurrentDomain] = useState([0, 20]); // Initial domain for current - reduced and set minimum
+
   // Persistent data state
   const [telemetryHistory, setTelemetryHistory] = useState(() => {
     const saved = localStorage.getItem('droneHistory');
     return saved ? JSON.parse(saved) : [];
   });
-  
+
   // Constants
   const MAX_VOLTAGE = 16.8;
   const MIN_VOLTAGE = 14.8;
   const WARNING_VOLTAGE = 15.0;
   const CRITICAL_PERCENTAGE = 15;
-  const MAX_CURRENT = 60;
-  
+  const MAX_CURRENT = 60; // Initial MAX_CURRENT - will be dynamic
+  const MIN_DOMAIN_CURRENT = [0, 20]; // Minimum domain for current graph Y-axis
+
   // Derived calculations
   const instantPower = voltage * current;
-  const batteryPercentage = ((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100;
+  const batteryPercentage = Math.max(0, Math.min(100,
+    ((voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE)) * 100
+  ));
   const isLowVoltage = voltage <= WARNING_VOLTAGE;
   const isCriticalPercentage = batteryPercentage <= CRITICAL_PERCENTAGE;
   const totalPowerDraw = telemetryHistory.reduce((acc, point) => acc + (point.power * (1/36000)), 0);
@@ -47,6 +53,7 @@ const DroneBattery = () => {
 
   // Update telemetry data
   const updateTelemetry = useCallback((v, c) => {
+    console.log('Updating telemetry:', { voltage: v, current: c });
     const now = Date.now();
     const newPoint = {
       time: new Date().toLocaleTimeString(),
@@ -55,25 +62,74 @@ const DroneBattery = () => {
       current: c,
       power: v * c
     };
-    
-    setTelemetryHistory(prev => [...prev, newPoint]);
-    setLastUpdateTime(now);
-  }, []);
 
-  // Handle telemetry updates
+    setTelemetryHistory(prev => {
+      const updatedHistory = [...prev, newPoint];
+      // Dynamically adjust current domain based on WINDOWED data
+      const windowedData = updatedHistory.slice(-windowSize); // Consider only recent data
+      const currentValues = windowedData.map(p => p.current);
+      const minCurrent = Math.min(0, ...currentValues);
+      const maxCurrent = Math.max(...currentValues, MIN_DOMAIN_CURRENT[1]); // Ensure domain is at least MIN_DOMAIN_CURRENT's upper bound
+
+      setCurrentDomain([
+        Math.min(minCurrent, MIN_DOMAIN_CURRENT[0]), // Lower bound is min of recent data and MIN_DOMAIN_CURRENT lower bound
+        maxCurrent * 1.2 // Apply buffer to the max of recent data or MIN_DOMAIN_CURRENT's upper bound
+      ]);
+      return updatedHistory;
+    });
+    setLastUpdateTime(now);
+  }, [windowSize]); // windowSize dependency added because we are using it for windowing
+
+  // Handle websocket connections and telemetry
   useEffect(() => {
-    const handleTelemetry = (data) => {
-      if (data.voltage !== undefined) setVoltage(data.voltage);
-      if (data.current !== undefined) setCurrent(data.current);
+    const handleConnection = (data) => {
+      setIsConnected(data.status === 'connected');
+      console.log('Connection status:', data.status);
+
+      if (!data.status === 'connected') {
+        setError('Connection lost. Attempting to reconnect...');
+      } else {
+        setError(null);
+      }
     };
 
+    const handleTelemetry = (data) => {
+      console.log('Received telemetry:', data);
+      if (data && data.battery) {
+        console.log('Battery data:', data.battery);
+        const { voltage: newVoltage, current: newCurrent } = data.battery;
+
+        if (typeof newVoltage === 'number' && !isNaN(newVoltage) && newVoltage >= 0) {
+          setVoltage(newVoltage);
+        }
+        if (typeof newCurrent === 'number' && !isNaN(newCurrent)) {
+          setCurrent(Math.abs(newCurrent));
+        }
+        setLastUpdateTime(Date.now());
+      }
+    };
+
+    const handleError = (data) => {
+      setError(data.message);
+      setTimeout(() => setError(null), 5000);
+    };
+
+    socketManager.subscribe('connection', handleConnection);
     socketManager.subscribe('telemetry', handleTelemetry);
-    return () => socketManager.unsubscribe('telemetry', handleTelemetry);
+    socketManager.subscribe('error', handleError);
+
+    return () => {
+      socketManager.unsubscribe('connection', handleConnection);
+      socketManager.unsubscribe('telemetry', handleTelemetry);
+      socketManager.unsubscribe('error', handleError);
+    };
   }, []);
 
   // Update history when voltage or current change
   useEffect(() => {
-    updateTelemetry(voltage, current);
+    if (voltage > 0 || current > 0) {  // Only update if we have valid values
+      updateTelemetry(voltage, current);
+    }
   }, [voltage, current, updateTelemetry]);
 
   const clearHistory = () => {
@@ -100,10 +156,20 @@ const DroneBattery = () => {
 
   return (
     <div className="bg-slate-900/50 text-white rounded-lg shadow-lg border border-gray-800 backdrop-blur-sm shadow-slate-900/50 space-y-6">
+      {/* Connection Error Display */}
+      {error && (
+        <div className="mx-6 mt-6 p-4 bg-red-500/10 border border-red-500 rounded-lg">
+          <p className="text-red-400">{error}</p>
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between p-6">
-          <h2 className="text-2xl tracking-wider font-light">BATTERY STATUS</h2>
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
+            <h2 className="text-2xl tracking-wider font-light">BATTERY STATUS</h2>
+          </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4">
               {!showAllTime && (
@@ -136,10 +202,6 @@ const DroneBattery = () => {
               <Trash2 size={16} />
               Clear History
             </button>
-            <div className="flex items-center space-x-4">
-              <Clock className="text-blue-400 h-5 w-5" />
-              <span className="text-blue-400 tracking-wider">{new Date(lastUpdateTime).toLocaleTimeString()}</span>
-            </div>
           </div>
         </div>
       </div>
@@ -176,57 +238,57 @@ const DroneBattery = () => {
         </div>
       </div>
 
-      {/* Main Graph - Enhanced styling */}
+      {/* Main Graph */}
       <div className="bg-slate-800/50 mx-6 p-6 rounded-lg border border-gray-800">
         <h3 className="text-lg font-light tracking-wider mb-4">VOLTAGE & CURRENT HISTORY</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={displayData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis 
-                dataKey="time" 
+              <XAxis
+                dataKey="time"
                 stroke="#9CA3AF"
                 tick={{ fill: '#9CA3AF' }}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="current"
-                domain={[0, MAX_CURRENT]}
+                domain={currentDomain}         // <-- Dynamically set domain based on windowed data
                 stroke="#EAB308"
                 tick={{ fill: '#9CA3AF' }}
-                label={{ 
-                  value: 'Current (A)', 
-                  angle: -90, 
+                label={{
+                  value: 'Current (A)',
+                  angle: -90,
                   position: 'insideLeft',
                   fill: '#9CA3AF'
                 }}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="voltage"
                 orientation="right"
                 domain={[14, 17]}
                 stroke="#3B82F6"
                 tick={{ fill: '#9CA3AF' }}
-                label={{ 
-                  value: 'Voltage (V)', 
-                  angle: 90, 
+                label={{
+                  value: 'Voltage (V)',
+                  angle: 90,
                   position: 'insideRight',
                   fill: '#9CA3AF'
                 }}
               />
               <Tooltip content={<CustomTooltip />} />
-              <Line 
+              <Line
                 yAxisId="current"
-                type="monotone" 
-                dataKey="current" 
-                stroke="#EAB308" 
+                type="monotone"
+                dataKey="current"
+                stroke="#EAB308"
                 strokeWidth={2}
                 dot={false}
               />
-              <Line 
+              <Line
                 yAxisId="voltage"
-                type="monotone" 
-                dataKey="voltage" 
-                stroke="#3B82F6" 
+                type="monotone"
+                dataKey="voltage"
+                stroke="#3B82F6"
                 strokeWidth={2}
                 dot={false}
               />
@@ -235,7 +297,7 @@ const DroneBattery = () => {
         </div>
       </div>
 
-      {/* Power Graph Toggle - Enhanced */}
+      {/* Power Graph Toggle */}
       <div className="mx-6">
         <button
           onClick={() => setShowPowerGraph(prev => !prev)}
@@ -246,7 +308,7 @@ const DroneBattery = () => {
         </button>
       </div>
 
-      {/* Collapsible Power Graph - Enhanced */}
+      {/* Power Graph */}
       {showPowerGraph && (
         <div className="bg-slate-800/50 mx-6 p-6 rounded-lg border border-gray-800">
           <h3 className="text-lg font-light tracking-wider mb-4">POWER CONSUMPTION HISTORY</h3>
@@ -254,26 +316,26 @@ const DroneBattery = () => {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={displayData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   stroke="#9CA3AF"
                   tick={{ fill: '#9CA3AF' }}
                 />
-                <YAxis 
+                <YAxis
                   stroke="#10B981"
                   tick={{ fill: '#9CA3AF' }}
-                  label={{ 
-                    value: 'Power (W)', 
-                    angle: -90, 
+                  label={{
+                    value: 'Power (W)',
+                    angle: -90,
                     position: 'insideLeft',
                     fill: '#9CA3AF'
                   }}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="power" 
-                  stroke="#10B981" 
+                <Line
+                  type="monotone"
+                  dataKey="power"
+                  stroke="#10B981"
                   strokeWidth={2}
                   dot={false}
                 />
@@ -283,7 +345,7 @@ const DroneBattery = () => {
         </div>
       )}
 
-      {/* Warning Indicator - Enhanced */}
+      {/* Warning Indicator */}
       {(isLowVoltage || isCriticalPercentage) && (
         <div className="mx-6 p-6 rounded-lg border border-red-500 bg-red-500/10 backdrop-blur-sm">
           <div className="flex items-center gap-4">
@@ -295,7 +357,7 @@ const DroneBattery = () => {
                 {isCriticalPercentage ? 'CRITICAL BATTERY LEVEL' : 'LOW BATTERY WARNING'}
               </h4>
               <p className="text-red-200 tracking-wider mt-1">
-                {isCriticalPercentage 
+                {isCriticalPercentage
                   ? `Battery at ${batteryPercentage.toFixed(1)}% - Land immediately!`
                   : `Battery voltage at ${voltage.toFixed(1)}V - Prepare to land`}
               </p>
@@ -304,7 +366,7 @@ const DroneBattery = () => {
         </div>
       )}
 
-      {/* Status Message - Enhanced */}
+      {/* Status Message */}
       <div className="text-sm text-gray-400 p-6 tracking-wider">
         <p>STATUS: {isCriticalPercentage ? 'CRITICAL' : isLowVoltage ? 'WARNING' : 'NORMAL'}</p>
         <p>LAST UPDATED: {new Date(lastUpdateTime).toLocaleTimeString()}</p>

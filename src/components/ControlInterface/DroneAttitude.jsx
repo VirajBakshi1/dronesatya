@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 
 const DroneAttitude = () => {
 

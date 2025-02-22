@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Package, AlertCircle } from 'lucide-react';
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 
 const DronePayload = () => {
   const [bayStatus, setBayStatus] = useState('UNKNOWN');

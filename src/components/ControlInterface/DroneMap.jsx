@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import socketManager from '../utils/socketManager';
+import socketManager from '../../utils/socketManager';
 import L from 'leaflet';
-import { waypointStore } from '../utils/waypointStore';
+import { waypointStore } from '../../utils/waypointStore';
 
 // Keep all existing icon configurations...
 delete L.Icon.Default.prototype._getIconUrl;

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import socketManager from '../utils/socketManager';
-import { waypointStore } from '../utils/waypointStore'; // Added import
+import socketManager from '../../utils/socketManager';
+import { waypointStore } from '../../utils/waypointStore'; // Added import
 
 const WaypointDropbox = () => {
   const [dragActive, setDragActive] = useState(false);

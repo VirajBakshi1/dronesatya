@@ -2,18 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { MoreVertical } from 'lucide-react';
 
 // Drone Components
-import DroneVideoFeed from '../components/DroneVideoFeed';
-import DroneVideoFeedPrecision from '../components/DroneVideoFeedPrecision';
-import DroneMap from '../components/DroneMap';
-import DroneTelemetry from '../components/DroneTelemetry';
-import WaypointDropbox from '../components/WaypointDropbox';
-import DronePWMControl from '../components/DronePWMControls';
-import DroneAttitude from '../components/DroneAttitude';
-import DronePrecisionLand from '../components/DronePrecisionLand';
-import DroneHealth from '../components/DroneHealth';
-import DroneBattery from '../components/DroneBattery';
-import DroneTemperatureMonitoring from '../components/DroneTemperatureMonitoring';
-import DronePayload from '../components/DronePayload';
+import DroneVideoFeed from '../components/ControlInterface/DroneVideoFeed.jsx';
+import DroneVideoFeedPrecision from '../components/ControlInterface/DroneVideoFeedPrecision.jsx';
+import DroneMap from '../components/ControlInterface/DroneMap.jsx';
+import DroneTelemetry from '../components/ControlInterface/DroneTelemetry.jsx';
+import WaypointDropbox from '../components/ControlInterface/WaypointDropbox.jsx';
+import DronePWMControl from '../components/ControlInterface/DronePWMControls.jsx';
+import DroneAttitude from '../components/ControlInterface/DroneAttitude.jsx';
+import DronePrecisionLand from '../components/ControlInterface/DronePrecisionLand.jsx';
+import DroneHealth from '../components/ControlInterface/DroneHealth.jsx';
+import DroneBattery from '../components/ControlInterface/DroneBattery.jsx';
+import DroneTemperatureMonitoring from '../components/ControlInterface/DroneTemperatureMonitoring.jsx';
+import DronePayload from '../components/ControlInterface/DronePayload.jsx';
 
 // UI Components
 import SpaceHeader from '../components/SpaceHeader';
