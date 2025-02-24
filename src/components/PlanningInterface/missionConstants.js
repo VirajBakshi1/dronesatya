@@ -19,4 +19,3 @@ export const LOCK_MODES = {
 export const DEFAULT_SPEED = 10;
 export const TAKEOFF_SPEED = 2;
 export const LANDING_SPEED = 1;
-
