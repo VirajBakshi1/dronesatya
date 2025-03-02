@@ -39,7 +39,7 @@ const WaypointDropbox = () => {
           setMissionStatus('uploaded');
           setStatusMessage({
             type: 'success',
-            message: 'Mission uploaded to drone. Arm the drone to begin.'
+            message: 'Mission uploaded to drone. Arm the drone and click Start Mission.'
           });
         } else {
           setMissionStatus('idle');
@@ -56,6 +56,19 @@ const WaypointDropbox = () => {
           setStatusMessage({
             type: 'success',
             message: 'Mission aborted. Drone will land safely.'
+          });
+        }
+      }
+      else if (data.command === 'start_mission') {
+        if (data.success) {
+          setStatusMessage({
+            type: 'success',
+            message: 'Mission started successfully!'
+          });
+        } else {
+          setStatusMessage({
+            type: 'error',
+            message: data.message || 'Failed to start mission'
           });
         }
       }
@@ -224,6 +237,24 @@ const WaypointDropbox = () => {
     }
   };
 
+  const handleStartMission = () => {
+    if (!isConnected) {
+      setStatusMessage({
+        type: 'error',
+        message: 'Not connected to drone'
+      });
+      return;
+    }
+
+    const success = socketManager.sendCommand('start_mission');
+    if (!success) {
+      setStatusMessage({
+        type: 'error',
+        message: 'Failed to send start mission command: Not connected'
+      });
+    }
+  };
+
   const handleAbort = () => {
     if (!isConnected) {
       setStatusMessage({
@@ -348,6 +379,27 @@ const WaypointDropbox = () => {
           >
             {isUploading ? 'UPLOADING...' : 'UPLOAD TO DRONE'}
           </button>
+        ) : missionStatus === 'uploaded' ? (
+          <>
+            <button
+              onClick={handleStartMission}
+              disabled={!isConnected}
+              className={`flex-1 py-3 px-4 rounded-lg font-light tracking-wider transition-all duration-300
+              ${isConnected
+                ? 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30'
+                : 'bg-slate-800/50 text-gray-500 cursor-not-allowed border border-gray-800'}`}
+            >
+              START MISSION
+            </button>
+            <button
+              onClick={handleAbort}
+              disabled={!isConnected}
+              className="flex-1 py-3 px-4 rounded-lg text-red-300 font-light tracking-wider
+                bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all duration-300"
+            >
+              ABORT MISSION
+            </button>
+          </>
         ) : (
           <button
             onClick={handleAbort}
@@ -363,7 +415,7 @@ const WaypointDropbox = () => {
       {/* Status Message - Enhanced */}
       <p className="mt-6 text-sm text-gray-400 text-center tracking-wider font-light">
         {missionStatus === 'uploaded'
-          ? 'Mission uploaded to drone - Arm drone to begin execution'
+          ? 'Mission uploaded to drone - Arm drone then press Start Mission'
           : missionStatus === 'running'
           ? 'Mission in progress - Click Abort for safe landing'
           : 'Select a waypoint file to begin'}
