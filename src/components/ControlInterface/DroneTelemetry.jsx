@@ -11,7 +11,9 @@ const DroneTelemetry = () => {
     flight_mode: '',
     connected: false,
     gps_fix: 'NO FIX',
-    satellites: 0
+    satellites: 0,
+    hdop: 0,
+    position_error: 0
   });
   const [error, setError] = useState(null);
 
@@ -112,20 +114,20 @@ const DroneTelemetry = () => {
             </div>
           </div>
 
-          {/* Armed Status */}
+          {/* GPS Quality - Replaced System Status */}
           <div className="bg-slate-800/50 p-6 rounded-lg border border-gray-800">
-            <h2 className="text-sm text-gray-300 mb-3 tracking-wider font-light">SYSTEM STATUS</h2>
+            <h2 className="text-sm text-gray-300 mb-3 tracking-wider font-light">GPS QUALITY</h2>
             <div className="grid grid-cols-2 gap-6">
               <div>
-                <p className="text-sm text-gray-400 tracking-wider mb-2">ARMED STATUS</p>
-                <p className="text-lg font-light tracking-wider">
-                  {telemetryData.armed ? '🟢 ARMED' : '🔴 DISARMED'}
+                <p className="text-sm text-gray-400 tracking-wider mb-2">HDOP</p>
+                <p className="text-lg font-light tracking-wider text-white">
+                  {formatValue(telemetryData.hdop, 2)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-400 tracking-wider mb-2">CONNECTION</p>
-                <p className="text-lg font-light tracking-wider">
-                  {telemetryData.connected ? '✅ ONLINE' : '❌ OFFLINE'}
+                <p className="text-sm text-gray-400 tracking-wider mb-2">POSITION ERROR</p>
+                <p className="text-lg font-light tracking-wider text-white">
+                  {formatValue(telemetryData.position_error, 2)}m
                 </p>
               </div>
             </div>

@@ -7,8 +7,11 @@ const DroneVideoFeedPrecision = () => {
     const [debugMsg, setDebugMsg] = useState('Initializing...');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [socketStatus, setSocketStatus] = useState('Disconnected');
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [lastRefresh, setLastRefresh] = useState(Date.now());
     const videoContainerRef = useRef(null);
     const frameCountRef = useRef(0);
+    const refreshTimerRef = useRef(null);
 
     // Video subscription effect - matching DroneVideoFeed pattern
     useEffect(() => {
@@ -57,11 +60,44 @@ const DroneVideoFeedPrecision = () => {
         }
     }, [isEnabled]);
 
+    // Auto-refresh timer
+    useEffect(() => {
+        if (autoRefresh && isEnabled) {
+            refreshTimerRef.current = setInterval(refreshVideoFeed, 5000);
+        } else if (refreshTimerRef.current) {
+            clearInterval(refreshTimerRef.current);
+        }
+        
+        return () => {
+            if (refreshTimerRef.current) {
+                clearInterval(refreshTimerRef.current);
+            }
+        };
+    }, [autoRefresh, isEnabled]);
+
     // Handle camera toggle - simplified
     const handleCameraToggle = () => {
         const newState = !isEnabled;
         setIsEnabled(newState);
         setDebugMsg(`Camera toggle requested: ${newState ? 'ON' : 'OFF'}`);
+    };
+
+    // Video feed refresh function
+    const refreshVideoFeed = () => {
+        setLastRefresh(Date.now());
+        setDebugMsg(`Manual refresh at ${new Date().toLocaleTimeString()}`);
+        
+        if (socketManager.isVideoConnected()) {
+            socketManager.videoSocket.send(JSON.stringify({
+                type: 'refresh_video',
+                camera: 'precision',
+                timestamp: Date.now()
+            }));
+            console.log('Precision camera refresh requested');
+        } else {
+            console.warn("Video WebSocket not connected. Refresh command not sent.");
+            setDebugMsg("Refresh failed - WebSocket disconnected");
+        }
     };
 
     // Fullscreen handler functions
@@ -120,8 +156,31 @@ const DroneVideoFeedPrecision = () => {
                         >
                             <span className="font-mono text-lg">[ ]</span>
                         </button>
+                        <button
+                            onClick={refreshVideoFeed}
+                            disabled={!isEnabled}
+                            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-gray-300 hover:text-white rounded-md transition-colors duration-200 flex items-center gap-2"
+                        >
+                            <span className="font-mono text-lg">⟳</span>
+                        </button>
                     </div>
                     <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2 mr-4">
+                            <span className="text-sm text-gray-300 tracking-wide">Auto-refresh</span>
+                            <button
+                                onClick={() => {
+                                    setAutoRefresh(!autoRefresh);
+                                    setDebugMsg(`Auto-refresh ${!autoRefresh ? 'enabled' : 'disabled'}`);
+                                }}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300
+                                    ${autoRefresh ? 'bg-green-500/80 border border-green-500/30' : 'bg-slate-700/80 border border-gray-700'}`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform duration-300
+                                        ${autoRefresh ? 'translate-x-6' : 'translate-x-1'}`}
+                                />
+                            </button>
+                        </div>
                         <button
                             onClick={handleCameraToggle}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300
@@ -169,9 +228,12 @@ const DroneVideoFeedPrecision = () => {
                         <div className="flex items-center gap-2">
                             <span className="text-gray-500">DEBUG:</span>
                             {debugMsg}
+                            {autoRefresh && isEnabled && <span className="text-gray-500 ml-4">Auto-refresh every 5s</span>}
                         </div>
                         <div className="text-right flex items-center gap-2">
-                            <span className="text-gray-500">Socket:</span>
+                            <span className="text-gray-500">Last refresh:</span>
+                            <span className="text-gray-300">{new Date(lastRefresh).toLocaleTimeString()}</span>
+                            <span className="text-gray-500 ml-4">Socket:</span>
                             <span className={socketStatus === 'Connected' ? 'text-green-500' : 'text-red-500'}>
                                 {socketStatus} {socketStatus === 'Connected' ? '●' : '○'}
                             </span>

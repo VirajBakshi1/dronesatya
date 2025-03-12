@@ -24,6 +24,7 @@ const DronePWMControl = () => {
   const flightActions = [
     { name: 'Arm', endpoint: 'arm', color: 'bg-slate-700 hover:bg-slate-600' },
     { name: 'Disarm', endpoint: 'disarm', color: 'bg-slate-700 hover:bg-slate-600' },
+    { name: 'Stabilize', endpoint: 'stabilize', color: 'bg-slate-700 hover:bg-slate-600' },
     { name: 'Altitude Hold', endpoint: 'altitude-hold', color: 'bg-slate-700 hover:bg-slate-600' },
     { name: 'Loiter', endpoint: 'loiter', color: 'bg-slate-700 hover:bg-slate-600' },
     { name: 'Smart RTL', endpoint: 'smart-rtl', color: 'bg-slate-700 hover:bg-slate-600' },

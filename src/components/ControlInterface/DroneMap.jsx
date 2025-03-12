@@ -5,7 +5,7 @@ import socketManager from '../../utils/socketManager';
 import L from 'leaflet';
 import { waypointStore } from '../../utils/waypointStore';
 
-// Keep all existing icon configurations...
+// Fix Leaflet icon issues
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -13,7 +13,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png'
 });
 
-// Keep existing icon definitions...
+// Custom icons
 const droneIcon = L.divIcon({
     className: 'drone-icon',
     html: `
@@ -39,7 +39,13 @@ const waypointIcon = L.divIcon({
     iconAnchor: [15, 15]
 });
 
-// Keep MapUpdater component...
+// Map type enum
+const MAP_TYPES = {
+  OSM: 'OpenStreetMap',
+  ARCGIS: 'ArcGIS World Imagery'
+};
+
+// MapUpdater component for Leaflet
 function MapUpdater({ center, zoom }) {
   const map = useMap();
 
@@ -52,8 +58,30 @@ function MapUpdater({ center, zoom }) {
   return null;
 }
 
+// TileLayerSelector component
+function TileLayerSelector({ mapType }) {
+  if (mapType === MAP_TYPES.OSM) {
+    return (
+      <TileLayer
+        attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+    );
+  } else if (mapType === MAP_TYPES.ARCGIS) {
+    return (
+      <TileLayer
+        attribution='© <a href="https://www.arcgis.com/">ArcGIS</a>'
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        maxZoom={23}
+        maxNativeZoom={19}
+      />
+    );
+  }
+  return null;
+}
+
 const DroneMap = () => {
-  // Existing state...
+  // Existing state
   const [telemetryData, setTelemetryData] = useState({
     latitude: 0,
     longitude: 0,
@@ -69,25 +97,25 @@ const DroneMap = () => {
   const [mapCenter, setMapCenter] = useState([18.5278859, 73.8522314]);
   const [mapZoom, setMapZoom] = useState(18);
   const [isLoading, setIsLoading] = useState(true);
-  const maxPathPoints = 100;
-
-  // New state for fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // State for map selector
+  const [selectedMapType, setSelectedMapType] = useState(MAP_TYPES.OSM);
+  
+  const maxPathPoints = 100;
   const mapContainerRef = useRef(null);
-
+  
   // Memoize the current position
   const dronePosition = useMemo(() =>
     [telemetryData.latitude, telemetryData.longitude],
     [telemetryData.latitude, telemetryData.longitude]
   );
 
+  // Calculate optimal zoom level
   const calculateOptimalZoom = (coordinates) => {
     if (!coordinates || coordinates.length === 0) return 18;
-
-    // For single point, use high zoom
     if (coordinates.length === 1) return 19;
 
-    // For multiple points, calculate distance and set appropriate zoom
     const lats = coordinates.map(coord => coord[0]);
     const lngs = coordinates.map(coord => coord[1]);
 
@@ -100,7 +128,6 @@ const DroneMap = () => {
     const lngDiff = maxLng - minLng;
     const maxDiff = Math.max(latDiff, lngDiff);
 
-    // Rough estimation of appropriate zoom level
     if (maxDiff > 0.1) return 14;
     if (maxDiff > 0.05) return 15;
     if (maxDiff > 0.01) return 16;
@@ -108,22 +135,47 @@ const DroneMap = () => {
     return 18;
   };
 
+  // Zoom handlers
   const handleDroneZoom = () => {
     if (dronePosition[0] !== 0 && dronePosition[1] !== 0) {
       setMapCenter(dronePosition);
-      setMapZoom(19); // High zoom for drone
+      setMapZoom(19);
     }
   };
 
   const handleMissionZoom = () => {
     if (missionWaypoints.length > 0) {
       const coordinates = missionWaypoints.map(wp => [wp.lat, wp.lng]);
-      setMapCenter(coordinates[0]); // Center on first waypoint
+      setMapCenter(coordinates[0]);
       setMapZoom(calculateOptimalZoom(coordinates));
     }
   };
 
+  // Toggle mission path
+  const toggleMissionPath = () => {
+    setShowMissionPath(prev => !prev);
+  };
 
+  // Clear mission path
+  const clearMissionPath = () => {
+    setMissionWaypoints([]);
+    setShowMissionPath(false);
+  };
+
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      if (mapContainerRef.current.requestFullscreen) {
+        mapContainerRef.current.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  // Set up telemetry subscriptions
   useEffect(() => {
     socketManager.connect();
 
@@ -156,8 +208,6 @@ const DroneMap = () => {
 
         setMissionWaypoints(waypoints);
         setShowMissionPath(true);
-
-        // Removed setMapCenter here, now controlled by buttons
       }
     };
 
@@ -179,7 +229,7 @@ const DroneMap = () => {
       socketManager.unsubscribe('connection', handleConnection);
       socketManager.disconnect();
     };
-  }, [missionWaypoints.length]);
+  }, []);
 
   // Handle waypoint store updates
   useEffect(() => {
@@ -188,8 +238,7 @@ const DroneMap = () => {
       setShowMissionPath(true);
 
       if (waypoints.length > 0) {
-        // Removed setMapCenter here, now controlled by buttons
-        setMapZoom(18); // Optionally reset zoom when waypoints are updated via store
+        setMapZoom(18);
       }
     };
 
@@ -204,28 +253,6 @@ const DroneMap = () => {
       waypointStore.removeListener(handleWaypointsUpdate);
     };
   }, []);
-
-  const toggleMissionPath = () => {
-    setShowMissionPath(prev => !prev);
-  };
-
-  const clearMissionPath = () => {
-    setMissionWaypoints([]);
-    setShowMissionPath(false);
-  };
-
-  // Fullscreen handler functions
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      if (mapContainerRef.current.requestFullscreen) {
-        mapContainerRef.current.requestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  };
 
   // Handle fullscreen change events
   useEffect(() => {
@@ -254,25 +281,50 @@ const DroneMap = () => {
       ref={mapContainerRef}
       className={`relative ${isFullscreen ? 'w-screen h-screen' : 'w-full h-[500px]'}`}
     >
+      <style jsx global>{`
+        .leaflet-container {
+          background: #222 !important;
+        }
+        .map-tile {
+          background-color: #222;
+        }
+      `}</style>
       {error && (
         <div className="absolute top-0 left-0 right-0 z-[2000] bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
+      {/* Map type selector */}
+      <div className="absolute top-4 left-4 z-[1000] flex gap-2 rounded-md overflow-hidden shadow-lg border border-slate-600/50">
+        {Object.values(MAP_TYPES).map(mapType => (
+          <button
+            key={mapType}
+            onClick={() => setSelectedMapType(mapType)}
+            className={`px-3 py-1.5 text-white text-sm font-medium transition-colors backdrop-blur-sm ${
+              selectedMapType === mapType 
+                ? 'bg-blue-600' 
+                : 'bg-slate-800/90 hover:bg-slate-700/90'
+            }`}
+            style={{ borderWidth: '0px' }}
+          >
+            {mapType}
+          </button>
+        ))}
+      </div>
+
+      {/* Map container */}
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
         minZoom={3}
-        maxZoom={20}
+        maxZoom={23}
         className="h-full w-full"
         whenReady={() => setIsLoading(false)}
+        zoomAnimation={true}
+        fadeAnimation={true}
       >
-        {/* Keep existing map components... */}
-        <TileLayer
-          attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <TileLayerSelector mapType={selectedMapType} />
 
         {dronePosition[0] !== 0 && dronePosition[1] !== 0 && (
           <Marker
@@ -299,7 +351,7 @@ const DroneMap = () => {
                 key={index}
                 position={[waypoint.lat, waypoint.lng]}
                 icon={waypointIcon}
-                zIndexOffset={1000 + index}  // This ensures proper stacking
+                zIndexOffset={1000 + index}
               >
                 <Popup className="custom-popup">
                   <div className="text-sm font-sans">
@@ -338,7 +390,7 @@ const DroneMap = () => {
         <MapUpdater center={mapCenter} zoom={mapZoom} />
       </MapContainer>
 
-      {/* Add fullscreen toggle button - Positioned above zoom controls */}
+      {/* Fullscreen toggle button */}
       <button
         onClick={toggleFullscreen}
         className="absolute top-20 left-4 z-[1000] px-4 py-2 bg-slate-800 text-white rounded-md shadow hover:bg-slate-700 transition-colors flex items-center gap-2 w-12 justify-center"
@@ -354,11 +406,12 @@ const DroneMap = () => {
         )}
       </button>
 
+      {/* Waypoint info */}
       <div className="absolute top-20 right-4 z-[1000] bg-white p-2 rounded shadow text-xs">
         Waypoints: {missionWaypoints.length} | Show Path: {showMissionPath ? 'Yes' : 'No'}
       </div>
 
-      {/* Zoom control buttons - LEFT side */}
+      {/* Zoom control buttons */}
       <div className="absolute bottom-4 left-4 z-[1000] flex flex-col gap-2">
         <button
           onClick={handleDroneZoom}
@@ -381,7 +434,7 @@ const DroneMap = () => {
         </button>
       </div>
 
-      {/* Existing buttons - RIGHT side */}
+      {/* Existing control buttons */}
       <div className="absolute bottom-4 right-4 z-[1000] flex flex-col gap-2">
         {missionWaypoints.length > 0 && (
           <button
@@ -399,6 +452,7 @@ const DroneMap = () => {
         </button>
       </div>
 
+      {/* Status display */}
       <div className="absolute top-4 right-4 z-[1000] bg-white p-2 rounded shadow space-y-2">
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${telemetryData.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
